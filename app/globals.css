@@ -1,0 +1,166 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+    padding: 0;
+    margin: 0;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans;
+  }
+
+  /* Apple-style focus ring */
+  :focus-visible {
+    @apply outline-none ring-2 ring-accent ring-offset-2;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-gray-100;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-gray-500 rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-700;
+  }
+}
+
+@layer components {
+  /* Apple-style button */
+  .btn-primary {
+    @apply inline-flex items-center justify-center px-6 py-3
+           bg-accent text-white font-medium rounded-full
+           hover:bg-accent-hover active:scale-[0.98]
+           transition-all duration-apple ease-apple;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center px-6 py-3
+           bg-gray-100 text-foreground font-medium rounded-full
+           hover:bg-gray-200 active:scale-[0.98]
+           transition-all duration-apple ease-apple;
+  }
+
+  .btn-whatsapp {
+    @apply inline-flex items-center justify-center gap-2 px-8 py-4
+           bg-success text-white font-semibold rounded-full text-lg
+           hover:bg-success-hover active:scale-[0.98]
+           transition-all duration-apple ease-apple shadow-apple;
+  }
+
+  /* Apple-style card */
+  .card {
+    @apply bg-white rounded-apple p-6 shadow-apple
+           transition-all duration-apple ease-apple
+           hover:shadow-apple-hover;
+  }
+
+  /* Container */
+  .container-apple {
+    @apply max-w-[1024px] mx-auto px-6;
+  }
+
+  .container-wide {
+    @apply max-w-[1440px] mx-auto px-6;
+  }
+
+  /* Section spacing */
+  .section {
+    @apply py-section;
+  }
+
+  .section-sm {
+    @apply py-section-sm;
+  }
+
+  /* Text styles */
+  .text-gradient {
+    @apply bg-gradient-to-r from-foreground to-gray-500 bg-clip-text text-transparent;
+  }
+
+  /* Link styles */
+  .link {
+    @apply text-accent hover:underline underline-offset-4
+           transition-colors duration-200;
+  }
+
+  /* Input styles */
+  .input {
+    @apply w-full px-4 py-3 bg-gray-100 border-none rounded-apple-sm
+           text-foreground placeholder:text-gray-500
+           focus:ring-2 focus:ring-accent focus:bg-white
+           transition-all duration-200;
+  }
+
+  /* Badge */
+  .badge {
+    @apply inline-flex items-center px-3 py-1 text-caption
+           bg-gray-100 text-gray-700 rounded-full;
+  }
+
+  .badge-success {
+    @apply bg-success/10 text-success;
+  }
+
+  .badge-warning {
+    @apply bg-amber-100 text-amber-700;
+  }
+
+  .badge-error {
+    @apply bg-red-100 text-red-700;
+  }
+}
+
+@layer utilities {
+  /* Animation utilities */
+  .animate-fade-in {
+    animation: fadeIn 0.5s ease-out forwards;
+  }
+
+  .animate-slide-up {
+    animation: slideUp 0.5s ease-out forwards;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes slideUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Glass effect */
+  .glass {
+    @apply bg-white/80 backdrop-blur-lg;
+  }
+}
