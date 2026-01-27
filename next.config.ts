@@ -13,6 +13,18 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  serverExternalPackages: ["@libsql/client", "@prisma/adapter-libsql"],
+  webpack: (config) => {
+    config.module.rules.push({
+      test: /\.md$/,
+      type: "asset/source",
+    });
+    config.resolve.alias = {
+      ...config.resolve.alias,
+    };
+    config.externals = [...(config.externals || []), "@libsql/client"];
+    return config;
+  },
 };
 
 export default nextConfig;
