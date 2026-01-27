@@ -35,15 +35,14 @@ export async function GET(request: NextRequest) {
   const action = searchParams.get("action");
 
   const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "";
-  const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "";
 
   if (!BOT_TOKEN) {
     return NextResponse.json({ error: "Bot token not configured" }, { status: 500 });
   }
 
   if (action === "set") {
-    // Set webhook
-    const webhookUrl = `${SITE_URL}/api/telegram/webhook`;
+    // Set webhook - use WEBHOOK_URL if set, otherwise use VERCEL_URL
+    const webhookUrl = process.env.WEBHOOK_URL || `https://${process.env.VERCEL_URL}/api/telegram/webhook`;
     const response = await fetch(
       `https://api.telegram.org/bot${BOT_TOKEN}/setWebhook`,
       {
