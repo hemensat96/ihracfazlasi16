@@ -23,7 +23,7 @@ export interface Product {
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
-  category?: Category;
+  category?: Category | null;
   variants?: ProductVariant[];
   images?: ProductImage[];
   primaryImage?: string;
