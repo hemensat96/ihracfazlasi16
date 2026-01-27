@@ -22,7 +22,7 @@ const statements = [
     slug TEXT NOT NULL UNIQUE,
     parentId INTEGER,
     isActive INTEGER NOT NULL DEFAULT 1,
-    createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+    createdAt TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%S.000Z', 'now')),
     FOREIGN KEY (parentId) REFERENCES Category(id)
   )`,
 
@@ -36,8 +36,8 @@ const statements = [
     price REAL NOT NULL,
     costPrice REAL,
     isActive INTEGER NOT NULL DEFAULT 1,
-    createdAt TEXT NOT NULL DEFAULT (datetime('now')),
-    updatedAt TEXT NOT NULL DEFAULT (datetime('now')),
+    createdAt TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%S.000Z', 'now')),
+    updatedAt TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%S.000Z', 'now')),
     FOREIGN KEY (categoryId) REFERENCES Category(id)
   )`,
 
@@ -66,7 +66,7 @@ const statements = [
   // Sale table
   `CREATE TABLE IF NOT EXISTS Sale (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    saleDate TEXT NOT NULL DEFAULT (datetime('now')),
+    saleDate TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%S.000Z', 'now')),
     totalAmount REAL NOT NULL,
     paymentMethod TEXT,
     notes TEXT,
@@ -96,7 +96,7 @@ const statements = [
     previousStock INTEGER NOT NULL,
     newStock INTEGER NOT NULL,
     note TEXT,
-    createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+    createdAt TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%S.000Z', 'now')),
     FOREIGN KEY (variantId) REFERENCES ProductVariant(id) ON DELETE CASCADE
   )`,
 
@@ -106,7 +106,7 @@ const statements = [
     key TEXT NOT NULL UNIQUE,
     name TEXT NOT NULL,
     isActive INTEGER NOT NULL DEFAULT 1,
-    createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+    createdAt TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%S.000Z', 'now')),
     lastUsedAt TEXT
   )`,
 
