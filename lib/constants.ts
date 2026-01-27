@@ -1,8 +1,14 @@
 // Site bilgileri
+const getBaseUrl = () => {
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  if (process.env.NEXT_PUBLIC_SITE_URL) return process.env.NEXT_PUBLIC_SITE_URL;
+  return "";
+};
+
 export const SITE_CONFIG = {
   name: "İhraç Fazlası Giyim",
   description: "Kaliteli ihraç fazlası giyim ürünleri",
-  url: process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000",
+  url: getBaseUrl(),
 };
 
 // WhatsApp
