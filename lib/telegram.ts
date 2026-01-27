@@ -1,8 +1,8 @@
 // Telegram Bot Configuration
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "";
 const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
-const VERCEL_URL = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "";
-const SITE_API = process.env.TELEGRAM_SITE_API || `${VERCEL_URL}/api/v1`;
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://ihracfazlasigiyim.com";
+const SITE_API = process.env.TELEGRAM_SITE_API || `${SITE_URL}/api/v1`;
 const API_KEY = process.env.API_SECRET_KEY || "";
 
 // Types
