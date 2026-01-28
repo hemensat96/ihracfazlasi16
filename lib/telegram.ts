@@ -668,21 +668,27 @@ async function handleSat(chatId: number, args: string[]) {
     return;
   }
 
+  console.log(`[/sat] SKU: ${sku}, Size: ${size}, Qty: ${quantity}, Price: ${unitPrice}`);
+
   const result = await apiCall("/sales", "POST", {
-    paymentMethod: "cash",
+    payment_method: "cash",
     items: [{
       sku: sku.toUpperCase(),
       size: size.toUpperCase(),
       quantity,
-      unitPrice,
+      unit_price: unitPrice,
     }],
     notes: "Telegram bot ile satış",
   });
 
+  console.log(`[/sat] API Result:`, JSON.stringify(result));
+
   if (result.success) {
     const total = quantity * unitPrice;
-    await sendMessage(chatId, `✅ <b>Satış kaydedildi!</b>\n\nSatış #${result.data?.id}\n${sku.toUpperCase()} - ${size.toUpperCase()}\n${quantity} x ${formatCurrency(unitPrice)}\n\n<b>Toplam: ${formatCurrency(total)}</b>\n\n📦 Stok otomatik düşüldü.`);
+    const saleId = result.data?.saleId || result.data?.id;
+    await sendMessage(chatId, `✅ <b>Satış kaydedildi!</b>\n\nSatış #${saleId}\n${sku.toUpperCase()} - ${size.toUpperCase()}\n${quantity} x ${formatCurrency(unitPrice)}\n\n<b>Toplam: ${formatCurrency(total)}</b>\n\n📦 Stok otomatik düşüldü.`);
   } else {
+    console.error(`[/sat] Error:`, result.error);
     await sendMessage(chatId, `❌ Hata: ${result.error?.message || "Satış kaydedilemedi"}`);
   }
 }
