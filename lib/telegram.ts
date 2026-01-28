@@ -45,23 +45,32 @@ export interface TelegramUpdate {
 // User state for multi-step operations
 const userStates: Map<number, { action: string; data: Record<string, unknown> }> = new Map();
 
-// Send message
+// Send message with retry mechanism
 export async function sendMessage(
   chatId: number,
   text: string,
-  options?: { parse_mode?: "HTML" | "Markdown"; reply_markup?: unknown }
-) {
-  const response = await fetch(`${TELEGRAM_API}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text,
-      parse_mode: options?.parse_mode || "HTML",
-      reply_markup: options?.reply_markup,
-    }),
-  });
-  return response.json();
+  options?: { parse_mode?: "HTML" | "Markdown"; reply_markup?: unknown },
+  retries = 3
+): Promise<unknown> {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const response = await fetch(`${TELEGRAM_API}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text,
+          parse_mode: options?.parse_mode || "HTML",
+          reply_markup: options?.reply_markup,
+        }),
+      });
+      return response.json();
+    } catch (error) {
+      console.error(`Telegram sendMessage attempt ${i + 1} failed:`, error);
+      if (i === retries - 1) throw error;
+      await new Promise(r => setTimeout(r, 1000 * (i + 1))); // Exponential backoff
+    }
+  }
 }
 
 // Get file URL

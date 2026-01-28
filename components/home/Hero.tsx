@@ -25,20 +25,22 @@ export default function Hero() {
             className="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-apple mb-8"
           >
             <span className="w-2 h-2 bg-success rounded-full animate-pulse" />
-            <span className="text-caption text-gray-700">Yeni Sezon Ürünleri</span>
+            <span className="text-caption text-gray-700">Bursa İnegöl&apos;den Türkiye&apos;ye</span>
           </motion.div>
 
           {/* Başlık */}
           <h1 className="text-display-large md:text-[96px] font-semibold text-foreground tracking-tight mb-6">
-            Kalite ve Stil
+            Dünya Markalarında
             <br />
-            <span className="text-gradient">Bir Arada</span>
+            <span className="text-gradient">Erkek Giyim</span>
           </h1>
 
-          {/* Alt Başlık */}
-          <p className="text-body-large text-gray-500 max-w-2xl mx-auto mb-10">
-            Avrupa standartlarında üretilmiş ihraç fazlası giyim ürünlerini keşfedin.
-            Premium kalite, uygun fiyat.
+          {/* Alt Başlık - Markalar */}
+          <p className="text-body-large text-gray-600 max-w-2xl mx-auto mb-4">
+            Prada • Lacoste • Tommy Hilfiger • Hugo Boss • Armani • Calvin Klein
+          </p>
+          <p className="text-body text-gray-400 max-w-xl mx-auto mb-10">
+            İhraç fazlası ithal ürünler, uygun fiyatlarla.
           </p>
 
           {/* CTA Butonları */}
@@ -63,16 +65,21 @@ export default function Hero() {
           className="grid grid-cols-3 gap-8 max-w-xl mx-auto mt-20"
         >
           <div className="text-center">
-            <p className="text-headline text-foreground">500+</p>
-            <p className="text-caption text-gray-500">Ürün Çeşidi</p>
+            <p className="text-headline text-foreground">10+</p>
+            <p className="text-caption text-gray-500">Dünya Markası</p>
           </div>
           <div className="text-center">
-            <p className="text-headline text-foreground">%70</p>
-            <p className="text-caption text-gray-500">Tasarruf</p>
+            <div className="flex items-center justify-center gap-1">
+              <span className="text-headline text-foreground">5.0</span>
+              <svg className="w-5 h-5 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+              </svg>
+            </div>
+            <p className="text-caption text-gray-500">Google (58 yorum)</p>
           </div>
           <div className="text-center">
-            <p className="text-headline text-foreground">5000+</p>
-            <p className="text-caption text-gray-500">Mutlu Müşteri</p>
+            <p className="text-headline text-foreground">%100</p>
+            <p className="text-caption text-gray-500">Orijinal Ürün</p>
           </div>
         </motion.div>
       </div>

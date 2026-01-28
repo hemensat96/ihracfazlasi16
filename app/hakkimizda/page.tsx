@@ -1,9 +1,9 @@
 import { Metadata } from "next";
-import { SITE_CONFIG, WHATSAPP_PHONE } from "@/lib/constants";
+import { SITE_CONFIG, WHATSAPP_PHONE, BRANDS, STORE_INFO } from "@/lib/constants";
 
 export const metadata: Metadata = {
   title: "Hakkımızda",
-  description: `${SITE_CONFIG.name} - Kaliteli ihraç fazlası giyim ürünleri`,
+  description: `${SITE_CONFIG.name} - Bursa İnegöl'de dünya markalarının ihraç fazlası orijinal erkek giyim ürünleri`,
 };
 
 export default function AboutPage() {
@@ -14,9 +14,36 @@ export default function AboutPage() {
         <div className="text-center mb-16">
           <h1 className="text-display text-foreground mb-6">Hakkımızda</h1>
           <p className="text-body-large text-gray-500 max-w-2xl mx-auto">
-            Kaliteli ihraç fazlası giyim ürünlerini uygun fiyatlarla sizlere
-            sunmak için buradayız.
+            Bursa İnegöl&apos;de dünya markalarının ihraç fazlası orijinal erkek giyim
+            ürünlerini uygun fiyatlarla sizlere sunuyoruz.
           </p>
+        </div>
+
+        {/* Google Rating */}
+        <div className="flex items-center justify-center gap-4 mb-12">
+          <div className="flex items-center gap-2 bg-white px-6 py-3 rounded-full shadow-apple">
+            <div className="flex items-center">
+              {[...Array(5)].map((_, i) => (
+                <svg key={i} className="w-5 h-5 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                </svg>
+              ))}
+            </div>
+            <span className="text-lg font-semibold text-foreground">{STORE_INFO.googleRating}</span>
+            <span className="text-gray-500">Google&apos;da {STORE_INFO.googleReviews} yorum</span>
+          </div>
+        </div>
+
+        {/* Markalar */}
+        <div className="bg-gray-50 rounded-apple p-8 mb-16">
+          <h3 className="text-center text-title text-foreground mb-6">Sattığımız Markalar</h3>
+          <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-4">
+            {BRANDS.map((brand) => (
+              <span key={brand} className="text-lg font-medium text-gray-700">
+                {brand}
+              </span>
+            ))}
+          </div>
         </div>
 
         {/* Content */}
@@ -26,17 +53,19 @@ export default function AboutPage() {
             <div className="space-y-4 text-body text-gray-500">
               <p>
                 <strong className="text-foreground">{SITE_CONFIG.name}</strong>,
-                Avrupa'nın önde gelen markalarının ihraç fazlası ürünlerini
-                sizlerle buluşturan bir giyim mağazasıdır.
+                Prada, Lacoste, Tommy Hilfiger, Hugo Boss, Armani, Calvin Klein
+                gibi dünya markalarının ihraç fazlası orijinal erkek giyim
+                ürünlerini sizlerle buluşturan bir mağazadır.
               </p>
               <p>
-                Yıllardır sektörde edindiğimiz tecrübe ile kaliteli ürünleri en
-                uygun fiyatlarla müşterilerimize sunmaktayız. Her sezon yeni
-                koleksiyonlarla karşınızdayız.
+                Bursa İnegöl&apos;deki mağazamızda tüm ürünlerimiz %100 orijinaldir
+                ve ihraç fazlası olarak temin edilmektedir. Bu sayede dünya
+                markalarını piyasa fiyatının çok altında uygun fiyatlarla sunabiliyoruz.
               </p>
               <p>
                 Müşteri memnuniyeti bizim için her şeyden önemlidir. Sorularınız
-                için her zaman WhatsApp üzerinden bize ulaşabilirsiniz.
+                için her zaman WhatsApp üzerinden veya mağazamızı ziyaret ederek
+                bize ulaşabilirsiniz.
               </p>
             </div>
           </div>
@@ -62,9 +91,9 @@ export default function AboutPage() {
                   </svg>
                 </div>
                 <div>
-                  <h4 className="font-medium text-foreground">Premium Kalite</h4>
+                  <h4 className="font-medium text-foreground">%100 Orijinal</h4>
                   <p className="text-sm text-gray-500">
-                    Avrupa standartlarında üretilmiş ürünler
+                    Dünya markalarının orijinal ürünleri
                   </p>
                 </div>
               </li>
@@ -136,11 +165,46 @@ export default function AboutPage() {
                 <div>
                   <h4 className="font-medium text-foreground">Hızlı Teslimat</h4>
                   <p className="text-sm text-gray-500">
-                    Türkiye'nin her yerine kargo
+                    Türkiye&apos;nin her yerine kargo
                   </p>
                 </div>
               </li>
             </ul>
+          </div>
+        </div>
+
+        {/* Mağaza Bilgileri */}
+        <div className="bg-white border border-gray-200 rounded-apple p-8 mb-12">
+          <h2 className="text-headline text-foreground mb-8 text-center">Mağazamız</h2>
+          <div className="grid md:grid-cols-3 gap-8">
+            <div className="text-center">
+              <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-6 h-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </div>
+              <h3 className="font-medium text-foreground mb-2">Adres</h3>
+              <p className="text-sm text-gray-500">{STORE_INFO.address}</p>
+            </div>
+            <div className="text-center">
+              <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-6 h-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <h3 className="font-medium text-foreground mb-2">Çalışma Saatleri</h3>
+              <p className="text-sm text-gray-500">Her gün {STORE_INFO.hours}</p>
+            </div>
+            <div className="text-center">
+              <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-6 h-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                </svg>
+              </div>
+              <h3 className="font-medium text-foreground mb-2">Telefon</h3>
+              <p className="text-sm text-gray-500">{STORE_INFO.phone}</p>
+            </div>
           </div>
         </div>
 
@@ -166,7 +230,7 @@ export default function AboutPage() {
             </a>
 
             <a
-              href="tel:+905384793696"
+              href={`tel:${STORE_INFO.phoneClean}`}
               className="btn-secondary"
             >
               <svg
@@ -183,7 +247,7 @@ export default function AboutPage() {
                   d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z"
                 />
               </svg>
-              0538 479 36 96
+              {STORE_INFO.phone}
             </a>
           </div>
         </div>

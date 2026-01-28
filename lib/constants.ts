@@ -6,10 +6,45 @@ const getBaseUrl = () => {
 };
 
 export const SITE_CONFIG = {
-  name: "İhraç Fazlası Giyim",
-  description: "Kaliteli ihraç fazlası giyim ürünleri",
+  name: "İhraç Fazlası Giyim İnegöl",
+  shortName: "İhraç Fazlası Giyim",
+  description: "Bursa İnegöl'de Prada, Lacoste, Tommy Hilfiger, Hugo Boss erkek giyim. İhraç fazlası orijinal ürünler.",
   url: getBaseUrl(),
 };
+
+// Mağaza Bilgileri
+export const STORE_INFO = {
+  name: "İhraç Fazlası Giyim İnegöl",
+  address: "Ertuğrulgazi, Kozluca Yolu 13/AA, 16400 İnegöl/Bursa",
+  city: "İnegöl",
+  region: "Bursa",
+  country: "Türkiye",
+  postalCode: "16400",
+  phone: "0538 479 36 96",
+  phoneClean: "+905384793696",
+  hours: "10:00 - 22:00",
+  openingHours: "Mo-Su 10:00-22:00",
+  googleRating: 5.0,
+  googleReviews: 58,
+  coordinates: {
+    lat: 40.0781,
+    lng: 29.5126,
+  },
+};
+
+// Dünya Markaları
+export const BRANDS = [
+  "Prada",
+  "Lacoste",
+  "Tommy Hilfiger",
+  "Hugo Boss",
+  "Armani",
+  "Versace",
+  "Calvin Klein",
+  "Ralph Lauren",
+  "Gucci",
+  "Burberry",
+];
 
 // WhatsApp
 export const WHATSAPP_PHONE = process.env.NEXT_PUBLIC_WHATSAPP_PHONE || "905384793696";
@@ -21,15 +56,15 @@ export const NAV_LINKS = [
   { href: "/hakkimizda", label: "Hakkımızda" },
 ];
 
-// Kategoriler (başlangıç için)
+// Kategoriler (erkek giyim)
 export const DEFAULT_CATEGORIES = [
-  { name: "Elbiseler", slug: "elbiseler" },
   { name: "Gömlekler", slug: "gomlekler" },
-  { name: "Pantolonlar", slug: "pantolonlar" },
-  { name: "Etekler", slug: "etekler" },
-  { name: "Ceketler", slug: "ceketler" },
   { name: "Tişörtler", slug: "tisortler" },
+  { name: "Pantolonlar", slug: "pantolonlar" },
+  { name: "Ceketler", slug: "ceketler" },
   { name: "Kazaklar", slug: "kazaklar" },
+  { name: "Montlar", slug: "montlar" },
+  { name: "Takım Elbise", slug: "takim-elbise" },
   { name: "Aksesuar", slug: "aksesuar" },
 ];
 

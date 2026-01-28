@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { NAV_LINKS, SITE_CONFIG } from "@/lib/constants";
@@ -39,9 +40,19 @@ export default function Header() {
             {/* Logo */}
             <Link
               href="/"
-              className="text-lg md:text-xl font-semibold text-foreground tracking-tight hover:opacity-70 transition-opacity"
+              className="flex items-center gap-3 hover:opacity-80 transition-opacity"
             >
-              {SITE_CONFIG.name}
+              <Image
+                src="/logo.png"
+                alt={SITE_CONFIG.name}
+                width={44}
+                height={44}
+                className="rounded-lg"
+                priority
+              />
+              <span className="text-base md:text-lg font-semibold text-foreground tracking-tight hidden sm:block">
+                {SITE_CONFIG.shortName}
+              </span>
             </Link>
 
             {/* Desktop Navigation */}
