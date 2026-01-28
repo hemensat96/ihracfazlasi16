@@ -3,7 +3,7 @@ import { SITE_CONFIG, WHATSAPP_PHONE, BRANDS, STORE_INFO } from "@/lib/constants
 
 export const metadata: Metadata = {
   title: "Hakkımızda",
-  description: `${SITE_CONFIG.name} - Bursa İnegöl'de dünya markalarının ihraç fazlası orijinal erkek giyim ürünleri`,
+  description: `${SITE_CONFIG.name} - Bursa İnegöl'de dünya markalarının ihraç fazlası ithal erkek giyim ürünleri`,
 };
 
 export default function AboutPage() {
@@ -14,7 +14,7 @@ export default function AboutPage() {
         <div className="text-center mb-16">
           <h1 className="text-display text-foreground mb-6">Hakkımızda</h1>
           <p className="text-body-large text-gray-500 max-w-2xl mx-auto">
-            Bursa İnegöl&apos;de dünya markalarının ihraç fazlası orijinal erkek giyim
+            Bursa İnegöl&apos;de dünya markalarının ihraç fazlası ithal erkek giyim
             ürünlerini uygun fiyatlarla sizlere sunuyoruz.
           </p>
         </div>
@@ -54,11 +54,11 @@ export default function AboutPage() {
               <p>
                 <strong className="text-foreground">{SITE_CONFIG.name}</strong>,
                 Prada, Lacoste, Tommy Hilfiger, Hugo Boss, Armani, Calvin Klein
-                gibi dünya markalarının ihraç fazlası orijinal erkek giyim
+                gibi dünya markalarının ihraç fazlası ithal erkek giyim
                 ürünlerini sizlerle buluşturan bir mağazadır.
               </p>
               <p>
-                Bursa İnegöl&apos;deki mağazamızda tüm ürünlerimiz %100 orijinaldir
+                Bursa İnegöl&apos;deki mağazamızda tüm ürünlerimiz %100 ithaldir
                 ve ihraç fazlası olarak temin edilmektedir. Bu sayede dünya
                 markalarını piyasa fiyatının çok altında uygun fiyatlarla sunabiliyoruz.
               </p>
@@ -91,9 +91,9 @@ export default function AboutPage() {
                   </svg>
                 </div>
                 <div>
-                  <h4 className="font-medium text-foreground">%100 Orijinal</h4>
+                  <h4 className="font-medium text-foreground">%100 İthal</h4>
                   <p className="text-sm text-gray-500">
-                    Dünya markalarının orijinal ürünleri
+                    Dünya markalarının ithal ürünleri
                   </p>
                 </div>
               </li>

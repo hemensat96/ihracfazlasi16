@@ -8,7 +8,7 @@ const getBaseUrl = () => {
 export const SITE_CONFIG = {
   name: "İhraç Fazlası Giyim İnegöl",
   shortName: "İhraç Fazlası Giyim",
-  description: "Bursa İnegöl'de Prada, Lacoste, Tommy Hilfiger, Hugo Boss erkek giyim. İhraç fazlası orijinal ürünler.",
+  description: "Bursa İnegöl'de Prada, Lacoste, Tommy Hilfiger, Hugo Boss erkek giyim. İhraç fazlası ithal ürünler.",
   url: getBaseUrl(),
 };
 

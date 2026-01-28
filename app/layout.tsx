@@ -30,7 +30,7 @@ export const metadata: Metadata = {
     "Armani",
     "Calvin Klein",
     "Ralph Lauren",
-    "orijinal ürün",
+    "ithal ürün",
     "uygun fiyat",
   ],
   authors: [{ name: SITE_CONFIG.name }],

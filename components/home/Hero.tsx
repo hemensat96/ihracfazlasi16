@@ -97,7 +97,7 @@ export default function Hero() {
           </div>
           <div className="text-center">
             <p className="text-2xl md:text-3xl font-semibold text-white">%100</p>
-            <p className="text-xs md:text-sm text-white/60">Orijinal Ürün</p>
+            <p className="text-xs md:text-sm text-white/60">İthal Ürün</p>
           </div>
         </motion.div>
       </div>
