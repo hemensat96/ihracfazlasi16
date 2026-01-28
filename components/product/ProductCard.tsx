@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { motion } from "framer-motion";
 import { formatPrice, getStockStatus, slugify } from "@/lib/utils";
 import type { Product } from "@/types";
 
@@ -11,20 +10,13 @@ interface ProductCardProps {
   index?: number;
 }
 
-export default function ProductCard({ product, index = 0 }: ProductCardProps) {
+export default function ProductCard({ product }: ProductCardProps) {
   const stockStatus = getStockStatus(product.totalStock || 0);
   const slug = slugify(product.name);
   const primaryImage = product.primaryImage || product.images?.[0]?.imageUrl;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true }}
-      transition={{ delay: index * 0.05, duration: 0.4 }}
-      className="w-full"
-    >
-      <Link href={`/urunler/${slug}-${product.id}`} className="group block">
+    <Link href={`/urunler/${slug}-${product.id}`} className="group block w-full">
         {/* Image Container */}
         <div className="relative aspect-[3/4] bg-gray-100 rounded-xl sm:rounded-apple overflow-hidden mb-2 sm:mb-4">
           {primaryImage ? (
@@ -113,7 +105,6 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
             </div>
           )}
         </div>
-      </Link>
-    </motion.div>
+    </Link>
   );
 }
