@@ -76,6 +76,18 @@ export interface TelegramPhoto {
   file_size?: number;
 }
 
+export interface TelegramVideo {
+  file_id: string;
+  file_unique_id: string;
+  width: number;
+  height: number;
+  duration: number;
+  thumbnail?: TelegramPhoto;
+  file_name?: string;
+  mime_type?: string;
+  file_size?: number;
+}
+
 export interface TelegramMessage {
   message_id: number;
   from?: TelegramUser;
@@ -83,6 +95,7 @@ export interface TelegramMessage {
   date: number;
   text?: string;
   photo?: TelegramPhoto[];
+  video?: TelegramVideo;
   caption?: string;
   media_group_id?: string;
 }
@@ -95,17 +108,18 @@ export interface TelegramUpdate {
 // User state for multi-step operations
 const userStates: Map<number, { action: string; data: Record<string, unknown> }> = new Map();
 
-// Media group tracking for multiple photos
+// Media group tracking for multiple photos/videos
 interface MediaGroupData {
   chatId: number;
   userId: number;
-  photos: string[]; // file_ids
+  photos: string[]; // photo file_ids
+  videos: string[]; // video file_ids
   caption?: string;
   timestamp: number;
   timeoutId?: NodeJS.Timeout;
 }
 const mediaGroups: Map<string, MediaGroupData> = new Map();
-const MEDIA_GROUP_TIMEOUT = 2000; // 2 seconds to collect all photos in a group
+const MEDIA_GROUP_TIMEOUT = 2000; // 2 seconds to collect all media in a group
 
 // Pending photo additions for /foto command
 interface PendingPhotoAdd {
@@ -946,12 +960,13 @@ async function handlePhoto(
         chatId,
         userId,
         photos: [largestPhoto.file_id],
+        videos: [],
         caption,
         timestamp: Date.now(),
       };
       mediaGroups.set(mediaGroupId, groupData);
 
-      // Set timeout to process after all photos arrive
+      // Set timeout to process after all media arrive
       groupData.timeoutId = setTimeout(() => {
         processMediaGroup(mediaGroupId);
       }, MEDIA_GROUP_TIMEOUT);
@@ -1080,6 +1095,101 @@ async function handlePhoto(
   }
 }
 
+// Handle video upload for product (with media group support)
+async function handleVideo(
+  chatId: number,
+  userId: number,
+  video: TelegramVideo,
+  caption?: string,
+  mediaGroupId?: string
+) {
+  // If this is part of a media group, collect videos
+  if (mediaGroupId) {
+    const existingGroup = mediaGroups.get(mediaGroupId);
+
+    if (existingGroup) {
+      // Add video to existing group
+      existingGroup.videos.push(video.file_id);
+      if (caption && !existingGroup.caption) {
+        existingGroup.caption = caption;
+      }
+      existingGroup.timestamp = Date.now();
+    } else {
+      // Create new media group with video
+      const groupData: MediaGroupData = {
+        chatId,
+        userId,
+        photos: [],
+        videos: [video.file_id],
+        caption,
+        timestamp: Date.now(),
+      };
+      mediaGroups.set(mediaGroupId, groupData);
+
+      // Set timeout to process after all media arrive
+      groupData.timeoutId = setTimeout(() => {
+        processMediaGroup(mediaGroupId);
+      }, MEDIA_GROUP_TIMEOUT);
+    }
+    return;
+  }
+
+  // Single video handling
+  const fileUrl = await getFileUrl(video.file_id);
+
+  if (!fileUrl) {
+    await sendMessage(chatId, "❌ Video alınamadı. Tekrar deneyin.");
+    return;
+  }
+
+  // Check for "video SKU" pattern in caption
+  if (caption) {
+    const videoMatch = caption.match(/^video\s+([A-Za-z0-9]+)$/i);
+    if (videoMatch) {
+      const sku = videoMatch[1].toUpperCase();
+      const productResult = await apiCall(`/products/sku/${sku}`);
+      if (productResult.success && productResult.data) {
+        await addVideoToProduct(chatId, productResult.data.id, sku, fileUrl);
+        return;
+      } else {
+        await sendMessage(chatId, `❌ Ürün bulunamadı: ${sku}`);
+        return;
+      }
+    }
+  }
+
+  // Store video for product creation
+  await sendMessage(chatId, "🎬 Video alındı!\n\n<i>Video eklemek için önce ürünü fotoğrafla oluşturun, sonra:</i>\n<code>video SKU</code>\n\nÖrnek: <code>video LCST05</code>");
+}
+
+// Add video to existing product
+async function addVideoToProduct(
+  chatId: number,
+  productId: number,
+  sku: string,
+  videoUrl: string
+) {
+  await sendMessage(chatId, "🎬 Video yükleniyor...");
+
+  const result = await apiCall(`/products/${productId}/videos/url`, "POST", {
+    videoUrl,
+    isPrimary: false,
+  });
+
+  if (result.success) {
+    await sendMessage(
+      chatId,
+      `✅ <b>Video eklendi!</b>\n\n📦 SKU: ${sku}\n🎬 Video yüklendi\n⏱️ Süre: ${result.data?.duration || 0} saniye`
+    );
+  } else {
+    console.error(`[Video Upload] Error for ${sku}:`, result.error);
+    await sendMessage(
+      chatId,
+      `❌ Video yüklenemedi.\n\n<i>Hata: ${result.error?.message || "Bilinmeyen hata"}</i>`
+    );
+  }
+}
+
 // Create product with photo
 async function createProductWithPhoto(
   chatId: number,
@@ -1155,14 +1265,14 @@ async function createProductWithPhoto(
   }
 }
 
-// Process media group after timeout - upload all photos
+// Process media group after timeout - upload all photos and videos
 async function processMediaGroup(mediaGroupId: string) {
   const groupData = mediaGroups.get(mediaGroupId);
   if (!groupData) return;
 
   mediaGroups.delete(mediaGroupId);
 
-  const { chatId, userId, photos, caption } = groupData;
+  const { chatId, userId, photos, videos, caption } = groupData;
 
   // Get file URLs for all photos
   const photoUrls: string[] = [];
@@ -1171,8 +1281,17 @@ async function processMediaGroup(mediaGroupId: string) {
     if (url) photoUrls.push(url);
   }
 
-  if (photoUrls.length === 0) {
-    await sendMessage(chatId, "❌ Fotoğraflar alınamadı. Tekrar deneyin.");
+  // Get file URLs for all videos
+  const videoUrls: string[] = [];
+  for (const fileId of videos) {
+    const url = await getFileUrl(fileId);
+    if (url) videoUrls.push(url);
+  }
+
+  const totalMedia = photoUrls.length + videoUrls.length;
+
+  if (totalMedia === 0) {
+    await sendMessage(chatId, "❌ Medya dosyaları alınamadı. Tekrar deneyin.");
     return;
   }
 
@@ -1181,18 +1300,27 @@ async function processMediaGroup(mediaGroupId: string) {
   if (pendingAdd) {
     pendingPhotoAdds.delete(`${chatId}_${userId}`);
     await addPhotosToProduct(chatId, pendingAdd.productId, pendingAdd.sku, photoUrls);
+    // Also upload videos if any
+    for (const videoUrl of videoUrls) {
+      await addVideoToProduct(chatId, pendingAdd.productId, pendingAdd.sku, videoUrl);
+    }
     return;
   }
 
   // Check caption for product info
   if (caption) {
-    // Check for "foto SKU" pattern first
-    const fotoMatch = caption.match(/^foto\s+([A-Za-z0-9]+)$/i);
-    if (fotoMatch) {
-      const sku = fotoMatch[1].toUpperCase();
+    // Check for "foto SKU" or "video SKU" pattern first
+    const mediaMatch = caption.match(/^(foto|video)\s+([A-Za-z0-9]+)$/i);
+    if (mediaMatch) {
+      const sku = mediaMatch[2].toUpperCase();
       const productResult = await apiCall(`/products/sku/${sku}`);
       if (productResult.success && productResult.data) {
-        await addPhotosToProduct(chatId, productResult.data.id, sku, photoUrls);
+        if (photoUrls.length > 0) {
+          await addPhotosToProduct(chatId, productResult.data.id, sku, photoUrls);
+        }
+        for (const videoUrl of videoUrls) {
+          await addVideoToProduct(chatId, productResult.data.id, sku, videoUrl);
+        }
         return;
       } else {
         await sendMessage(chatId, `❌ Ürün bulunamadı: ${sku}`);
@@ -1203,15 +1331,19 @@ async function processMediaGroup(mediaGroupId: string) {
     // Try simple format: "SKU İsim Fiyat" or "SKU | İsim | Fiyat"
     const parsed = parseSimpleCaption(caption);
     if (parsed) {
-      await createProductWithMultiplePhotos(chatId, parsed.sku, parsed.name, parsed.price, photoUrls, undefined, undefined, userId);
+      await createProductWithMultiplePhotos(chatId, parsed.sku, parsed.name, parsed.price, photoUrls, undefined, undefined, userId, videoUrls);
       return;
     }
   }
 
   // No caption or couldn't parse - try AI analysis on first photo
-  await sendMessage(chatId, `📷 <b>${photoUrls.length} fotoğraf alındı!</b>\n\n🔍 Ürün analiz ediliyor...`);
+  const mediaInfo = videoUrls.length > 0
+    ? `📷 <b>${photoUrls.length} fotoğraf + 🎬 ${videoUrls.length} video alındı!</b>`
+    : `📷 <b>${photoUrls.length} fotoğraf alındı!</b>`;
 
-  const analysis = await analyzeProductImage(photoUrls[0]);
+  await sendMessage(chatId, `${mediaInfo}\n\n🔍 Ürün analiz ediliyor...`);
+
+  const analysis = photoUrls.length > 0 ? await analyzeProductImage(photoUrls[0]) : null;
 
   if (analysis && analysis.autoSku) {
     // Store analysis for later use - fully automatic mode
@@ -1219,6 +1351,7 @@ async function processMediaGroup(mediaGroupId: string) {
       action: "add_product_auto",
       data: {
         photoUrls,
+        videoUrls,
         analysis,
       },
     });
@@ -1226,6 +1359,9 @@ async function processMediaGroup(mediaGroupId: string) {
     const brandInfo = analysis.brand ? `<b>${analysis.brand}</b>` : "Bilinmeyen Marka";
     const confidenceEmoji = analysis.confidence === "high" ? "🎯" : analysis.confidence === "medium" ? "🤔" : "❓";
     const categoryInfo = analysis.suggestedCategory ? `📁 Kategori: ${analysis.suggestedCategory}\n` : "";
+    const mediaCount = videoUrls.length > 0
+      ? `🖼️ Fotoğraf: ${photoUrls.length} | 🎬 Video: ${videoUrls.length}\n\n`
+      : `🖼️ Fotoğraf: ${photoUrls.length} adet\n\n`;
 
     await sendMessage(
       chatId,
@@ -1236,7 +1372,7 @@ async function processMediaGroup(mediaGroupId: string) {
       `🏪 Marka: ${brandInfo}\n` +
       `👔 Tip: ${analysis.productType}\n` +
       `🎨 Renk: ${analysis.color}\n` +
-      `🖼️ Fotoğraf: ${photoUrls.length} adet\n\n` +
+      mediaCount +
       `<b>💰 Sadece fiyat girin:</b>\n` +
       `Örnek: <code>450</code>\n\n` +
       `<i>Farklı SKU veya isim istiyorsanız:</i>\n` +
@@ -1249,6 +1385,7 @@ async function processMediaGroup(mediaGroupId: string) {
       action: "add_product_with_ai",
       data: {
         photoUrls,
+        videoUrls,
         analysis,
       },
     });
@@ -1256,6 +1393,9 @@ async function processMediaGroup(mediaGroupId: string) {
     const brandInfo = analysis.brand ? `<b>${analysis.brand}</b>` : "Marka belirlenemedi";
     const confidenceEmoji = analysis.confidence === "high" ? "🎯" : analysis.confidence === "medium" ? "🤔" : "❓";
     const categoryInfo = analysis.suggestedCategory ? `\n📁 Kategori: ${analysis.suggestedCategory}` : "";
+    const mediaCount = videoUrls.length > 0
+      ? `🖼️ Fotoğraf: ${photoUrls.length} | 🎬 Video: ${videoUrls.length}\n\n`
+      : `🖼️ Fotoğraf: ${photoUrls.length} adet\n\n`;
 
     await sendMessage(
       chatId,
@@ -1263,7 +1403,7 @@ async function processMediaGroup(mediaGroupId: string) {
       `🏷️ Marka: ${brandInfo}\n` +
       `👔 Tip: ${analysis.productType}\n` +
       `🎨 Renk: ${analysis.color}${categoryInfo}\n` +
-      `🖼️ Fotoğraf: ${photoUrls.length} adet\n\n` +
+      mediaCount +
       `📝 <b>Önerilen İsim:</b>\n${analysis.suggestedName}\n\n` +
       `<b>SKU ve Fiyat girin:</b>\n<code>[SKU] [Fiyat]</code>\n\n` +
       `Örnek: <code>TH001 450</code>\n\n` +
@@ -1273,17 +1413,21 @@ async function processMediaGroup(mediaGroupId: string) {
     // No AI or failed - fallback to manual
     userStates.set(userId, {
       action: "add_product_info",
-      data: { photoUrls },
+      data: { photoUrls, videoUrls },
     });
+
+    const manualMediaInfo = videoUrls.length > 0
+      ? `📷 <b>${photoUrls.length} fotoğraf + 🎬 ${videoUrls.length} video alındı!</b>`
+      : `📷 <b>${photoUrls.length} fotoğraf alındı!</b>`;
 
     await sendMessage(
       chatId,
-      `📷 <b>${photoUrls.length} fotoğraf alındı!</b>\n\nÜrün bilgilerini gönderin:\n\n<code>SKU İsim Fiyat</code>\n\nÖrnek:\n<code>YLDZ02 Loro Piano Kazak 1200</code>\n\n<i>Varsayılan bedenler: S, M, L, XL, XXL</i>\n<i>/iptal ile vazgeçebilirsiniz</i>`
+      `${manualMediaInfo}\n\nÜrün bilgilerini gönderin:\n\n<code>SKU İsim Fiyat</code>\n\nÖrnek:\n<code>YLDZ02 Loro Piano Kazak 1200</code>\n\n<i>Varsayılan bedenler: S, M, L, XL, XXL</i>\n<i>/iptal ile vazgeçebilirsiniz</i>`
     );
   }
 }
 
-// Create product with multiple photos
+// Create product with multiple photos and videos
 async function createProductWithMultiplePhotos(
   chatId: number,
   sku: string,
@@ -1292,7 +1436,8 @@ async function createProductWithMultiplePhotos(
   photoUrls: string[],
   categoryName?: string,
   customSizes?: string[],
-  userId?: number
+  userId?: number,
+  videoUrls?: string[]
 ) {
   const sizes = customSizes && customSizes.length > 0 ? customSizes : DEFAULT_SIZES;
 
@@ -1339,16 +1484,38 @@ async function createProductWithMultiplePhotos(
     }
   }
 
+  // Upload videos if any
+  let videoUploadedCount = 0;
+  if (videoUrls && videoUrls.length > 0) {
+    for (let i = 0; i < videoUrls.length; i++) {
+      console.log(`Uploading video ${i + 1}/${videoUrls.length} for ${sku}: ${videoUrls[i]}`);
+      const videoResult = await apiCall(`/products/${result.data.id}/videos/url`, "POST", {
+        videoUrl: videoUrls[i],
+        isPrimary: false,
+      });
+      if (videoResult.success) {
+        videoUploadedCount++;
+      } else {
+        console.error(`Video upload failed for ${sku} video ${i + 1}:`, videoResult.error);
+        errors.push(videoResult.error?.message || `Video ${i + 1} yüklenemedi`);
+      }
+    }
+  }
+
   // Get category name for display
   let categoryDisplay = "";
   if (categoryName) {
     categoryDisplay = `\n📁 Kategori: ${categoryName}`;
   }
 
-  let message = `✅ <b>Ürün eklendi!</b>\n\n📦 SKU: <code>${sku.toUpperCase()}</code>\n📝 İsim: ${name}\n💰 Fiyat: ${formatCurrency(price)}${categoryDisplay}\n📏 Bedenler: ${sizes.join(", ")}\n🖼️ Fotoğraf: ${uploadedCount}/${photoUrls.length} yüklendi`;
+  const mediaDisplay = videoUrls && videoUrls.length > 0
+    ? `🖼️ Fotoğraf: ${uploadedCount}/${photoUrls.length} | 🎬 Video: ${videoUploadedCount}/${videoUrls.length}`
+    : `🖼️ Fotoğraf: ${uploadedCount}/${photoUrls.length} yüklendi`;
+
+  let message = `✅ <b>Ürün eklendi!</b>\n\n📦 SKU: <code>${sku.toUpperCase()}</code>\n📝 İsim: ${name}\n💰 Fiyat: ${formatCurrency(price)}${categoryDisplay}\n📏 Bedenler: ${sizes.join(", ")}\n${mediaDisplay}`;
 
   if (errors.length > 0) {
-    message += `\n\n⚠️ Bazı fotoğraflar yüklenemedi:\n${errors.slice(0, 3).join("\n")}`;
+    message += `\n\n⚠️ Bazı dosyalar yüklenemedi:\n${errors.slice(0, 3).join("\n")}`;
   }
 
   // Ask for stock entry
@@ -1492,10 +1659,11 @@ async function handleTextInput(chatId: number, userId: number, text: string) {
 
     // Support both single photo (legacy) and multiple photos
     const photoUrls = state.data.photoUrls as string[] | undefined;
+    const videoUrls = (state.data.videoUrls as string[]) || [];
     const photoUrl = state.data.photoUrl as string | undefined;
 
     if (photoUrls && photoUrls.length > 0) {
-      await createProductWithMultiplePhotos(chatId, sku, name, price, photoUrls, undefined, undefined, userId);
+      await createProductWithMultiplePhotos(chatId, sku, name, price, photoUrls, undefined, undefined, userId, videoUrls);
     } else if (photoUrl) {
       await createProductWithPhoto(chatId, sku, name, price, photoUrl, undefined, undefined, userId);
     }
@@ -1508,6 +1676,7 @@ async function handleTextInput(chatId: number, userId: number, text: string) {
   if (state.action === "add_product_auto") {
     const analysis = state.data.analysis as ProductAnalysis;
     const photoUrls = state.data.photoUrls as string[];
+    const videoUrls = (state.data.videoUrls as string[]) || [];
 
     const words = text.trim().split(/\s+/);
     const firstWord = words[0];
@@ -1543,7 +1712,7 @@ async function handleTextInput(chatId: number, userId: number, text: string) {
     // Use suggested category name (will be auto-created if needed)
     const categoryName = analysis.suggestedCategory || undefined;
 
-    await createProductWithMultiplePhotos(chatId, sku, productName, price, photoUrls, categoryName, undefined, userId);
+    await createProductWithMultiplePhotos(chatId, sku, productName, price, photoUrls, categoryName, undefined, userId, videoUrls);
 
     // Don't delete state - createProductWithMultiplePhotos sets new state for stock entry
     return true;
@@ -1553,6 +1722,7 @@ async function handleTextInput(chatId: number, userId: number, text: string) {
   if (state.action === "add_product_with_ai") {
     const analysis = state.data.analysis as ProductAnalysis;
     const photoUrls = state.data.photoUrls as string[];
+    const videoUrls = (state.data.videoUrls as string[]) || [];
 
     // Parse input: "SKU Fiyat" or "SKU Fiyat Custom Name Here"
     const words = text.trim().split(/\s+/);
@@ -1577,7 +1747,7 @@ async function handleTextInput(chatId: number, userId: number, text: string) {
     // Use suggested category name (will be auto-created if needed)
     const categoryName = analysis.suggestedCategory || undefined;
 
-    await createProductWithMultiplePhotos(chatId, sku, productName, price, photoUrls, categoryName, undefined, userId);
+    await createProductWithMultiplePhotos(chatId, sku, productName, price, photoUrls, categoryName, undefined, userId, videoUrls);
 
     // Don't delete state - createProductWithMultiplePhotos sets new state for stock entry
     return true;
@@ -1934,6 +2104,12 @@ export async function handleUpdate(update: TelegramUpdate) {
   // Handle photo (with media group support)
   if (message.photo) {
     await handlePhoto(chatId, userId, message.photo, message.caption, message.media_group_id);
+    return;
+  }
+
+  // Handle video (with media group support)
+  if (message.video) {
+    await handleVideo(chatId, userId, message.video, message.caption, message.media_group_id);
     return;
   }
 

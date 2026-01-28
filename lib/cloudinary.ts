@@ -64,6 +64,65 @@ export async function uploadImageFromUrl(
   return uploadImage(imageUrl, folder);
 }
 
+// Video yükleme sonucu
+export interface VideoUploadResult {
+  url: string;
+  publicId: string;
+  width: number;
+  height: number;
+  duration: number;
+  thumbnailUrl: string;
+}
+
+// URL'den video yükleme
+export async function uploadVideoFromUrl(
+  videoUrl: string,
+  folder: string = "products"
+): Promise<VideoUploadResult> {
+  const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+  const apiKey = process.env.CLOUDINARY_API_KEY;
+  const apiSecret = process.env.CLOUDINARY_API_SECRET;
+
+  console.log(`[Cloudinary Video] Config check - cloud_name: ${cloudName ? "SET" : "MISSING"}`);
+
+  if (!cloudName || !apiKey || !apiSecret) {
+    throw new Error(`Cloudinary config eksik`);
+  }
+
+  try {
+    console.log(`[Cloudinary Video] Uploading from: ${videoUrl.substring(0, 50)}...`);
+
+    const result = await cloudinary.uploader.upload(videoUrl, {
+      folder: `ihrac-fazlasi/${folder}`,
+      resource_type: "video",
+      transformation: [
+        { quality: "auto:good" },
+        { format: "mp4" },
+      ],
+    });
+
+    console.log(`[Cloudinary Video] Upload success: ${result.secure_url}`);
+
+    // Generate thumbnail URL from video
+    const thumbnailUrl = result.secure_url
+      .replace("/video/upload/", "/video/upload/so_0,w_800,h_800,c_limit,f_jpg/")
+      .replace(/\.[^/.]+$/, ".jpg");
+
+    return {
+      url: result.secure_url,
+      publicId: result.public_id,
+      width: result.width,
+      height: result.height,
+      duration: result.duration || 0,
+      thumbnailUrl,
+    };
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error("[Cloudinary Video] Upload error:", errorMsg, error);
+    throw new Error(`Video yükleme başarısız: ${errorMsg}`);
+  }
+}
+
 // Görsel silme
 export async function deleteImage(publicId: string): Promise<boolean> {
   try {
