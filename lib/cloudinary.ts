@@ -18,7 +18,20 @@ export async function uploadImage(
   source: string, // base64 data veya URL
   folder: string = "products"
 ): Promise<UploadResult> {
+  // Check Cloudinary config
+  const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+  const apiKey = process.env.CLOUDINARY_API_KEY;
+  const apiSecret = process.env.CLOUDINARY_API_SECRET;
+
+  console.log(`[Cloudinary] Config check - cloud_name: ${cloudName ? "SET" : "MISSING"}, api_key: ${apiKey ? "SET" : "MISSING"}, api_secret: ${apiSecret ? "SET" : "MISSING"}`);
+
+  if (!cloudName || !apiKey || !apiSecret) {
+    throw new Error(`Cloudinary config eksik: cloud_name=${!!cloudName}, api_key=${!!apiKey}, api_secret=${!!apiSecret}`);
+  }
+
   try {
+    console.log(`[Cloudinary] Uploading from: ${source.substring(0, 50)}...`);
+
     const result = await cloudinary.uploader.upload(source, {
       folder: `ihrac-fazlasi/${folder}`,
       transformation: [
@@ -28,6 +41,8 @@ export async function uploadImage(
       ],
     });
 
+    console.log(`[Cloudinary] Upload success: ${result.secure_url}`);
+
     return {
       url: result.secure_url,
       publicId: result.public_id,
@@ -35,8 +50,9 @@ export async function uploadImage(
       height: result.height,
     };
   } catch (error) {
-    console.error("Cloudinary upload error:", error);
-    throw new Error("Görsel yükleme başarısız");
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error("[Cloudinary] Upload error:", errorMsg, error);
+    throw new Error(`Görsel yükleme başarısız: ${errorMsg}`);
   }
 }
 

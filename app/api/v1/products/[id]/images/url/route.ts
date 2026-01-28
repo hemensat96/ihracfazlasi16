@@ -9,8 +9,13 @@ interface RouteContext {
 }
 
 const uploadFromUrlSchema = z.object({
-  image_url: z.string().url("Geçerli bir URL girin"),
-  is_primary: z.boolean().optional().default(false),
+  // Support both camelCase and snake_case
+  image_url: z.string().url("Geçerli bir URL girin").optional(),
+  imageUrl: z.string().url("Geçerli bir URL girin").optional(),
+  is_primary: z.boolean().optional(),
+  isPrimary: z.boolean().optional(),
+}).refine(data => data.image_url || data.imageUrl, {
+  message: "image_url veya imageUrl gerekli",
 });
 
 // POST /api/v1/products/[id]/images/url - URL'den görsel ekle
@@ -47,13 +52,18 @@ export async function POST(request: NextRequest, context: RouteContext) {
       );
     }
 
-    const { image_url, is_primary } = validation.data;
+    // Support both naming conventions
+    const imageUrl = validation.data.image_url || validation.data.imageUrl!;
+    const isPrimary = validation.data.is_primary ?? validation.data.isPrimary ?? false;
+
+    console.log(`[Image Upload] Product ID: ${productId}, URL: ${imageUrl.substring(0, 50)}...`);
 
     // Upload from URL to Cloudinary
-    const uploadResult = await uploadImageFromUrl(image_url, "products");
+    const uploadResult = await uploadImageFromUrl(imageUrl, "products");
+    console.log(`[Image Upload] Cloudinary result:`, uploadResult.url);
 
     // If setting as primary, unset other primaries
-    if (is_primary) {
+    if (isPrimary) {
       await prisma.productImage.updateMany({
         where: { productId },
         data: { isPrimary: false },
@@ -65,10 +75,11 @@ export async function POST(request: NextRequest, context: RouteContext) {
       data: {
         productId,
         imageUrl: uploadResult.url,
-        isPrimary: is_primary || product.images.length === 0,
+        isPrimary: isPrimary || product.images.length === 0,
         sortOrder: product.images.length,
       },
     });
+    console.log(`[Image Upload] Saved to DB, image ID: ${image.id}`);
 
     return successResponse(
       {
@@ -79,11 +90,12 @@ export async function POST(request: NextRequest, context: RouteContext) {
       201
     );
   } catch (error) {
-    console.error("Image upload from URL error:", error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error("[Image Upload] Error:", errorMessage, error);
     return errorResponse(
       "UPLOAD_ERROR",
       "URL'den görsel yüklenemedi",
-      "URL erişilebilir ve geçerli bir görsel olmalı",
+      errorMessage,
       500
     );
   }
