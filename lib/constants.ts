@@ -56,20 +56,15 @@ export const NAV_LINKS = [
   { href: "/hakkimizda", label: "Hakkımızda" },
 ];
 
-// Kategoriler (erkek giyim)
+// Kategoriler (3 ana kategori)
 export const DEFAULT_CATEGORIES = [
-  { name: "Gömlekler", slug: "gomlekler" },
-  { name: "Tişörtler", slug: "tisortler" },
-  { name: "Pantolonlar", slug: "pantolonlar" },
-  { name: "Ceketler", slug: "ceketler" },
-  { name: "Kazaklar", slug: "kazaklar" },
-  { name: "Montlar", slug: "montlar" },
-  { name: "Takım Elbise", slug: "takim-elbise" },
+  { name: "Üst Giyim", slug: "ust-giyim" },
+  { name: "Alt Giyim", slug: "alt-giyim" },
   { name: "Aksesuar", slug: "aksesuar" },
 ];
 
 // Bedenler
-export const SIZES = ["XS", "S", "M", "L", "XL", "XXL"];
+export const SIZES = ["S", "M", "L", "XL", "XXL", "3XL", "4XL", "5XL"];
 
 // Renkler (Türkçe)
 export const COLORS = [

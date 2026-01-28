@@ -52,7 +52,7 @@ const MAIN_CATEGORIES = [
 ];
 
 // Default sizes for products
-const DEFAULT_SIZES = ["S", "M", "L", "XL", "XXL"];
+const DEFAULT_SIZES = ["S", "M", "L", "XL", "XXL", "3XL", "4XL", "5XL"];
 
 // Types
 export interface TelegramUser {
@@ -735,8 +735,8 @@ Merhaba! Mağaza yönetim botuna hoş geldiniz.
 2. AI markayı, tipi ve rengi tanır
 3. SKU otomatik oluşturulur
 4. Fiyat yazın: <code>450</code>
-5. Seri stok girin: <code>1 2 3 2 1</code>
-   (S=1, M=2, L=3, XL=2, XXL=1)
+5. Seri stok girin: <code>1 2 3 3 2 1 1 1</code>
+   (S=1, M=2, L=3, XL=3, XXL=2, 3XL=1, 4XL=1, 5XL=1)
 6. Ürün tamamlandı! ✅
 
 <b>📦 ÜRÜN YÖNETİMİ</b>
@@ -750,7 +750,7 @@ Merhaba! Mağaza yönetim botuna hoş geldiniz.
 <b>📊 STOK YÖNETİMİ</b>
 /stok [SKU] - Stok sorgula
 /seristok [SKU] [stoklar] - Seri stok gir
-  Örnek: <code>/seristok TH05 1 2 3 2 1</code>
+  Örnek: <code>/seristok TH05 1 2 3 3 2 1 1 1</code>
 /stokekle [SKU] [beden] [adet] - Tek stok ekle
 /stokdus [SKU] [beden] [adet] - Stok düş
 /dusukstok - Düşük stokları göster
@@ -2437,8 +2437,8 @@ async function handleSeriStok(chatId: number, args: string[]) {
       chatId,
       `❌ Kullanım: /seristok [SKU] [stok değerleri]\n\n` +
       `<b>Seri format:</b>\n` +
-      `<code>/seristok LCST05 1 2 3 2 1</code>\n` +
-      `(S=1, M=2, L=3, XL=2, XXL=1)\n\n` +
+      `<code>/seristok LCST05 1 2 3 3 2 1 1 1</code>\n` +
+      `(S=1, M=2, L=3, XL=3, XXL=2, 3XL=1, 4XL=1, 5XL=1)\n\n` +
       `<b>Tek sayı:</b>\n` +
       `<code>/seristok LCST05 5</code>\n` +
       `(Tüm bedenlere 5 adet)`
