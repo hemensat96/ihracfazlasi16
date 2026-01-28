@@ -32,15 +32,23 @@ const BRAND_SKU_MAP: Record<string, string> = {
 
 const KNOWN_BRANDS = Object.keys(BRAND_SKU_MAP).map(b => b.charAt(0).toUpperCase() + b.slice(1));
 
-// Product categories
-const PRODUCT_CATEGORIES = [
-  { name: "T-Shirt & Polo", slug: "t-shirt-polo", keywords: ["t-shirt", "tişört", "polo", "tshirt"] },
-  { name: "Gömlek", slug: "gomlek", keywords: ["gömlek", "shirt", "camicia"] },
-  { name: "Kazak & Triko", slug: "kazak-triko", keywords: ["kazak", "triko", "sweater", "knitwear", "örgü"] },
-  { name: "Ceket & Mont", slug: "ceket-mont", keywords: ["ceket", "mont", "jacket", "coat", "blazer"] },
-  { name: "Pantolon", slug: "pantolon", keywords: ["pantolon", "pants", "trousers", "chino"] },
-  { name: "Şort", slug: "sort", keywords: ["şort", "shorts", "bermuda"] },
-  { name: "Sweatshirt", slug: "sweatshirt", keywords: ["sweatshirt", "hoodie", "kapüşonlu"] },
+// Main product categories (simplified - only 3)
+const MAIN_CATEGORIES = [
+  {
+    name: "Üst Giyim",
+    slug: "ust-giyim",
+    keywords: ["t-shirt", "tişört", "polo", "tshirt", "gömlek", "shirt", "kazak", "triko", "sweater", "knitwear", "sweatshirt", "hoodie", "ceket", "mont", "jacket", "coat", "blazer", "yelek", "vest", "hırka", "cardigan"]
+  },
+  {
+    name: "Alt Giyim",
+    slug: "alt-giyim",
+    keywords: ["pantolon", "pants", "trousers", "chino", "şort", "shorts", "bermuda", "eşofman", "jogger", "jean", "jeans", "kot", "denim"]
+  },
+  {
+    name: "Aksesuar",
+    slug: "aksesuar",
+    keywords: ["kemer", "belt", "çanta", "bag", "cüzdan", "wallet", "şapka", "hat", "cap", "atkı", "scarf", "eldiven", "glove", "kravat", "tie", "papyon", "saat", "watch", "gözlük", "sunglasses"]
+  }
 ];
 
 // Types
@@ -288,14 +296,19 @@ Marka belirsizse: low ve brand: null`,
 
     const analysis = JSON.parse(jsonMatch[0]) as ProductAnalysis;
 
-    // Find matching category
+    // Find matching main category (Üst Giyim, Alt Giyim, Aksesuar)
     const lowerProductType = analysis.productType.toLowerCase();
-    for (const cat of PRODUCT_CATEGORIES) {
+    for (const cat of MAIN_CATEGORIES) {
       if (cat.keywords.some(k => lowerProductType.includes(k))) {
         analysis.suggestedCategory = cat.name;
         analysis.suggestedCategorySlug = cat.slug;
         break;
       }
+    }
+    // Default to Üst Giyim if no match found
+    if (!analysis.suggestedCategory) {
+      analysis.suggestedCategory = "Üst Giyim";
+      analysis.suggestedCategorySlug = "ust-giyim";
     }
 
     // Generate auto SKU based on brand
