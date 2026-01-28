@@ -327,6 +327,60 @@ async function apiCall(endpoint: string, method: string = "GET", body?: unknown)
   return response.json();
 }
 
+// Find or create category by name
+async function findOrCreateCategory(categoryName: string): Promise<number | null> {
+  if (!categoryName) return null;
+
+  try {
+    // First check if category exists
+    const categoriesResult = await apiCall("/categories");
+    if (categoriesResult.success && categoriesResult.data) {
+      // Look for exact or similar match (case-insensitive)
+      const existing = categoriesResult.data.find((c: { name: string; id: number }) =>
+        c.name.toLowerCase() === categoryName.toLowerCase() ||
+        c.name.toLowerCase().includes(categoryName.toLowerCase()) ||
+        categoryName.toLowerCase().includes(c.name.toLowerCase())
+      );
+
+      if (existing) {
+        console.log(`[Category] Found existing: ${existing.name} (ID: ${existing.id})`);
+        return existing.id;
+      }
+    }
+
+    // Category doesn't exist - create it
+    // Generate slug from name
+    const slug = categoryName
+      .toLowerCase()
+      .replace(/ü/g, "u")
+      .replace(/ö/g, "o")
+      .replace(/ş/g, "s")
+      .replace(/ç/g, "c")
+      .replace(/ğ/g, "g")
+      .replace(/ı/g, "i")
+      .replace(/[^a-z0-9\s-]/g, "")
+      .replace(/\s+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "");
+
+    const createResult = await apiCall("/categories", "POST", {
+      name: categoryName,
+      slug: slug || categoryName.toLowerCase().replace(/\s+/g, "-"),
+    });
+
+    if (createResult.success && createResult.data) {
+      console.log(`[Category] Created new: ${categoryName} (ID: ${createResult.data.id})`);
+      return createResult.data.id;
+    }
+
+    console.error(`[Category] Failed to create: ${categoryName}`, createResult.error);
+    return null;
+  } catch (error) {
+    console.error(`[Category] Error finding/creating category:`, error);
+    return null;
+  }
+}
+
 // Format helpers
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(amount);
@@ -1132,7 +1186,7 @@ async function createProductWithMultiplePhotos(
   name: string,
   price: number,
   photoUrls: string[],
-  categorySlug?: string,
+  categoryName?: string,
   customSizes?: string[]
 ) {
   const sizes = customSizes && customSizes.length > 0 ? customSizes : ["S", "M", "L", "XL"];
@@ -1148,15 +1202,11 @@ async function createProductWithMultiplePhotos(
     })),
   };
 
-  if (categorySlug) {
-    const catResult = await apiCall("/categories");
-    if (catResult.success && catResult.data) {
-      const category = catResult.data.find((c: { slug: string }) =>
-        c.slug.toLowerCase() === categorySlug.toLowerCase()
-      );
-      if (category) {
-        productData.categoryId = category.id;
-      }
+  // Find or create category if provided
+  if (categoryName) {
+    const categoryId = await findOrCreateCategory(categoryName);
+    if (categoryId) {
+      productData.categoryId = categoryId;
     }
   }
 
@@ -1184,7 +1234,13 @@ async function createProductWithMultiplePhotos(
     }
   }
 
-  let message = `✅ <b>Ürün eklendi!</b>\n\n📦 SKU: ${sku.toUpperCase()}\n📝 İsim: ${name}\n💰 Fiyat: ${formatCurrency(price)}\n📏 Bedenler: ${sizes.join(", ")}\n🖼️ Fotoğraf: ${uploadedCount}/${photoUrls.length} yüklendi`;
+  // Get category name for display
+  let categoryDisplay = "";
+  if (categoryName) {
+    categoryDisplay = `\n📁 Kategori: ${categoryName}`;
+  }
+
+  let message = `✅ <b>Ürün eklendi!</b>\n\n📦 SKU: ${sku.toUpperCase()}\n📝 İsim: ${name}\n💰 Fiyat: ${formatCurrency(price)}${categoryDisplay}\n📏 Bedenler: ${sizes.join(", ")}\n🖼️ Fotoğraf: ${uploadedCount}/${photoUrls.length} yüklendi`;
 
   if (errors.length > 0) {
     message += `\n\n⚠️ Bazı fotoğraflar yüklenemedi:\n${errors.slice(0, 3).join("\n")}`;
@@ -1370,10 +1426,10 @@ async function handleTextInput(chatId: number, userId: number, text: string) {
       }
     }
 
-    // Use suggested category slug
-    const categorySlug = analysis.suggestedCategorySlug || undefined;
+    // Use suggested category name (will be auto-created if needed)
+    const categoryName = analysis.suggestedCategory || undefined;
 
-    await createProductWithMultiplePhotos(chatId, sku, productName, price, photoUrls, categorySlug);
+    await createProductWithMultiplePhotos(chatId, sku, productName, price, photoUrls, categoryName);
 
     userStates.delete(userId);
     return true;
@@ -1404,10 +1460,10 @@ async function handleTextInput(chatId: number, userId: number, text: string) {
     const customName = words.length > 2 ? words.slice(2).join(" ") : null;
     const productName = customName || analysis.suggestedName;
 
-    // Use suggested category slug from analysis
-    const categorySlug = analysis.suggestedCategorySlug || undefined;
+    // Use suggested category name (will be auto-created if needed)
+    const categoryName = analysis.suggestedCategory || undefined;
 
-    await createProductWithMultiplePhotos(chatId, sku, productName, price, photoUrls, categorySlug);
+    await createProductWithMultiplePhotos(chatId, sku, productName, price, photoUrls, categoryName);
 
     userStates.delete(userId);
     return true;
