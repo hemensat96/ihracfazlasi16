@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { formatPrice, getStockStatus, slugify } from "@/lib/utils";
+import { formatPrice, getStockStatus, slugify, sortSizes } from "@/lib/utils";
 import type { Product } from "@/types";
 
 interface ProductCardProps {
@@ -91,8 +91,8 @@ export default function ProductCard({ product }: ProductCardProps) {
           {/* Available Sizes - hidden on mobile */}
           {product.variants && product.variants.length > 0 && (
             <div className="hidden sm:flex flex-wrap gap-1 pt-2">
-              {[...new Set(product.variants.filter(v => v.stock > 0).map(v => v.size))]
-                .filter(Boolean)
+              {sortSizes([...new Set(product.variants.filter(v => v.stock > 0).map(v => v.size))]
+                .filter(Boolean) as string[])
                 .slice(0, 5)
                 .map((size) => (
                   <span

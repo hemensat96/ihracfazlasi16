@@ -98,12 +98,18 @@ export function sortSizes(sizes: string[]): string[] {
     L: 5,
     XL: 6,
     XXL: 7,
+    "3XL": 8,
     XXXL: 8,
+    "4XL": 9,
+    "5XL": 10,
+    "6XL": 11,
   };
 
   return sizes.sort((a, b) => {
-    const aOrder = sizeOrder[a.toUpperCase()] || parseInt(a) || 999;
-    const bOrder = sizeOrder[b.toUpperCase()] || parseInt(b) || 999;
+    const aUpper = a.toUpperCase();
+    const bUpper = b.toUpperCase();
+    const aOrder = sizeOrder[aUpper] || parseInt(a) || 999;
+    const bOrder = sizeOrder[bUpper] || parseInt(b) || 999;
     return aOrder - bOrder;
   });
 }
