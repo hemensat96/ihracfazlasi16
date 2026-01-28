@@ -260,10 +260,13 @@ async function generateNextSku(prefix: string): Promise<string> {
   }
 }
 
-// Analyze product image with Claude Vision API
-async function analyzeProductImage(imageUrl: string): Promise<ProductAnalysis | null> {
+// Image type detection result
+type ImageType = "product" | "ledger" | "receipt" | "other";
+
+// Detect image type (product, ledger, receipt, other)
+async function detectImageType(imageUrl: string): Promise<{ type: ImageType; base64: string; mediaType: string } | null> {
   if (!ANTHROPIC_API_KEY) {
-    console.log("ANTHROPIC_API_KEY not configured, skipping AI analysis");
+    console.log("ANTHROPIC_API_KEY not configured, skipping image type detection");
     return null;
   }
 
@@ -273,6 +276,89 @@ async function analyzeProductImage(imageUrl: string): Promise<ProductAnalysis | 
     const imageBuffer = await imageResponse.arrayBuffer();
     const base64Image = Buffer.from(imageBuffer).toString("base64");
     const mediaType = imageUrl.includes(".png") ? "image/png" : "image/jpeg";
+
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 100,
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "image",
+                source: {
+                  type: "base64",
+                  media_type: mediaType,
+                  data: base64Image,
+                },
+              },
+              {
+                type: "text",
+                text: `Bu görselin türünü belirle. Sadece şu kelimelerden birini yaz:
+
+- product: Kıyafet, giyim ürünü, tekstil ürünü (t-shirt, gömlek, pantolon, ceket, kazak vb.)
+- ledger: Defter, kasa defteri, muhasebe defteri, el yazısı kayıt defteri
+- receipt: Fiş, fatura, makbuz, hesap pusulası
+- other: Yukarıdakilerden hiçbiri
+
+Sadece tek kelime yanıt ver: product, ledger, receipt veya other`,
+              },
+            ],
+          },
+        ],
+      }),
+    });
+
+    if (!response.ok) {
+      console.error("Anthropic API error:", response.status);
+      return null;
+    }
+
+    const data = await response.json();
+    const content = data.content?.[0]?.text?.toLowerCase().trim() || "other";
+
+    let imageType: ImageType = "other";
+    if (content.includes("product")) imageType = "product";
+    else if (content.includes("ledger")) imageType = "ledger";
+    else if (content.includes("receipt")) imageType = "receipt";
+
+    console.log(`[Image Type Detection] Type: ${imageType}, Raw: ${content}`);
+
+    return { type: imageType, base64: base64Image, mediaType };
+  } catch (error) {
+    console.error("Error detecting image type:", error);
+    return null;
+  }
+}
+
+// Analyze product image with Claude Vision API (uses pre-fetched base64 if available)
+async function analyzeProductImage(imageUrl: string, prefetchedData?: { base64: string; mediaType: string }): Promise<ProductAnalysis | null> {
+  if (!ANTHROPIC_API_KEY) {
+    console.log("ANTHROPIC_API_KEY not configured, skipping AI analysis");
+    return null;
+  }
+
+  try {
+    let base64Image: string;
+    let mediaType: string;
+
+    if (prefetchedData) {
+      base64Image = prefetchedData.base64;
+      mediaType = prefetchedData.mediaType;
+    } else {
+      // Download image and convert to base64
+      const imageResponse = await fetch(imageUrl);
+      const imageBuffer = await imageResponse.arrayBuffer();
+      base64Image = Buffer.from(imageBuffer).toString("base64");
+      mediaType = imageUrl.includes(".png") ? "image/png" : "image/jpeg";
+    }
 
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -363,18 +449,26 @@ Marka belirsizse: low ve brand: null`,
 }
 
 // Analyze ledger/cash book image with Claude Vision API
-async function analyzeLedgerImage(imageUrl: string): Promise<LedgerAnalysis | null> {
+async function analyzeLedgerImage(imageUrl: string, prefetchedData?: { base64: string; mediaType: string }): Promise<LedgerAnalysis | null> {
   if (!ANTHROPIC_API_KEY) {
     console.log("ANTHROPIC_API_KEY not configured, skipping ledger analysis");
     return null;
   }
 
   try {
-    // Download image and convert to base64
-    const imageResponse = await fetch(imageUrl);
-    const imageBuffer = await imageResponse.arrayBuffer();
-    const base64Image = Buffer.from(imageBuffer).toString("base64");
-    const mediaType = imageUrl.includes(".png") ? "image/png" : "image/jpeg";
+    let base64Image: string;
+    let mediaType: string;
+
+    if (prefetchedData) {
+      base64Image = prefetchedData.base64;
+      mediaType = prefetchedData.mediaType;
+    } else {
+      // Download image and convert to base64
+      const imageResponse = await fetch(imageUrl);
+      const imageBuffer = await imageResponse.arrayBuffer();
+      base64Image = Buffer.from(imageBuffer).toString("base64");
+      mediaType = imageUrl.includes(".png") ? "image/png" : "image/jpeg";
+    }
 
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -1152,6 +1246,13 @@ async function handlePhoto(
     return;
   }
 
+  // State: Waiting for ledger photo
+  if (state?.action === "wait_ledger_photo") {
+    userStates.delete(userId);
+    await handleDefter(chatId, userId, fileUrl);
+    return;
+  }
+
   // State: Adding photo to existing product
   if (state?.action === "add_photo_to_product") {
     const { sku, productId } = state.data as { sku: string; productId: number };
@@ -1201,10 +1302,27 @@ async function handlePhoto(
     }
   }
 
-  // No caption - try AI analysis
-  await sendMessage(chatId, "🔍 Ürün analiz ediliyor...");
+  // No caption - detect image type first, then analyze
+  await sendMessage(chatId, "🔍 Görsel analiz ediliyor...");
 
-  const analysis = await analyzeProductImage(fileUrl);
+  // First detect what type of image this is
+  const imageTypeResult = await detectImageType(fileUrl);
+
+  if (imageTypeResult?.type === "ledger") {
+    // It's a ledger/cash book - analyze as ledger
+    await sendMessage(chatId, "📒 Kasa defteri tespit edildi, analiz ediliyor...");
+    await handleDefter(chatId, userId, fileUrl, { base64: imageTypeResult.base64, mediaType: imageTypeResult.mediaType });
+    return;
+  }
+
+  if (imageTypeResult?.type === "receipt") {
+    await sendMessage(chatId, "🧾 Fiş/fatura tespit edildi. Şu an sadece ürün ve defter analizi destekleniyor.");
+    return;
+  }
+
+  // It's a product (or unknown) - analyze as product
+  const prefetchedData = imageTypeResult ? { base64: imageTypeResult.base64, mediaType: imageTypeResult.mediaType } : undefined;
+  const analysis = await analyzeProductImage(fileUrl, prefetchedData);
 
   if (analysis && analysis.autoSku) {
     // Store analysis for later use - fully automatic mode
@@ -2169,10 +2287,12 @@ async function handleFinans(chatId: number) {
 }
 
 // /defter or /kasa - Analyze ledger photo
-async function handleDefter(chatId: number, userId: number, imageUrl: string) {
-  await sendMessage(chatId, "📒 Kasa defteri analiz ediliyor...");
+async function handleDefter(chatId: number, userId: number, imageUrl: string, prefetchedData?: { base64: string; mediaType: string }) {
+  if (!prefetchedData) {
+    await sendMessage(chatId, "📒 Kasa defteri analiz ediliyor...");
+  }
 
-  const analysis = await analyzeLedgerImage(imageUrl);
+  const analysis = await analyzeLedgerImage(imageUrl, prefetchedData);
 
   if (!analysis) {
     await sendMessage(chatId, "❌ Defter analiz edilemedi. Lütfen daha net bir fotoğraf gönderin.");
@@ -2522,7 +2642,8 @@ export async function handleUpdate(update: TelegramUpdate) {
         break;
       case "/defter":
       case "/kasa":
-        await sendMessage(chatId, "📒 Kasa defteri fotoğrafını /defter veya /kasa caption'ı ile gönderin.\n\nÖrnek: Fotoğraf seç → caption'a <code>/defter</code> yaz → gönder");
+        userStates.set(userId, { action: "wait_ledger_photo", data: {} });
+        await sendMessage(chatId, "📒 Kasa defteri fotoğrafını gönderin...\n\n<i>/iptal ile vazgeçebilirsiniz</i>");
         break;
       case "/onayla":
         await handleOnayla(chatId, userId);
