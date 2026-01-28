@@ -66,15 +66,19 @@ interface PendingPhotoAdd {
 }
 const pendingPhotoAdds: Map<string, PendingPhotoAdd> = new Map();
 
-// Send message with retry mechanism
+// Send message with robust retry mechanism
 export async function sendMessage(
   chatId: number,
   text: string,
-  options?: { parse_mode?: "HTML" | "Markdown"; reply_markup?: unknown },
-  retries = 3
-): Promise<unknown> {
-  for (let i = 0; i < retries; i++) {
+  options?: { parse_mode?: "HTML" | "Markdown"; reply_markup?: unknown }
+): Promise<boolean> {
+  const maxRetries = 5;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 saniye timeout
+
       const response = await fetch(`${TELEGRAM_API}/sendMessage`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -84,14 +88,27 @@ export async function sendMessage(
           parse_mode: options?.parse_mode || "HTML",
           reply_markup: options?.reply_markup,
         }),
+        signal: controller.signal,
       });
-      return response.json();
+
+      clearTimeout(timeoutId);
+
+      if (response.ok) {
+        return true;
+      }
+
+      console.log(`Telegram attempt ${attempt} failed: ${response.status}`);
     } catch (error) {
-      console.error(`Telegram sendMessage attempt ${i + 1} failed:`, error);
-      if (i === retries - 1) throw error;
-      await new Promise(r => setTimeout(r, 1000 * (i + 1))); // Exponential backoff
+      console.log(`Telegram attempt ${attempt} error:`, error);
+    }
+
+    if (attempt < maxRetries) {
+      await new Promise(r => setTimeout(r, attempt * 1000)); // 1s, 2s, 3s, 4s bekleme
     }
   }
+
+  console.error(`Telegram sendMessage failed after ${maxRetries} attempts`);
+  return false;
 }
 
 // Get file URL
