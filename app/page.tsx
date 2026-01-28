@@ -1,4 +1,5 @@
 import Hero from "@/components/home/Hero";
+import PromoVideo from "@/components/home/PromoVideo";
 import Categories from "@/components/home/Categories";
 import FeaturedProducts from "@/components/home/FeaturedProducts";
 import WhatsAppCTA from "@/components/home/WhatsAppCTA";
@@ -41,6 +42,7 @@ export default async function HomePage() {
   return (
     <>
       <Hero />
+      <PromoVideo />
       <Categories />
       <FeaturedProducts
         products={featuredProducts}

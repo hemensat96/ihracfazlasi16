@@ -5,28 +5,25 @@ import { motion } from "framer-motion";
 
 const categories = [
   {
-    name: "Elbiseler",
-    slug: "elbiseler",
-    description: "Şık ve rahat elbise modelleri",
-    image: "https://images.unsplash.com/photo-1595777457583-95e059d581b8?w=600&h=800&fit=crop",
+    name: "Üst Giyim",
+    slug: "ust-giyim",
+    description: "T-shirt, gömlek, kazak, ceket",
+    image: "https://images.unsplash.com/photo-1562157873-818bc0726f68?w=400",
+    href: "/urunler?kategori=ust-giyim",
   },
   {
-    name: "Gömlekler",
-    slug: "gomlekler",
-    description: "Her tarza uygun gömlekler",
-    image: "https://images.unsplash.com/photo-1596755094514-f87e34085b2c?w=600&h=800&fit=crop",
+    name: "Alt Giyim",
+    slug: "alt-giyim",
+    description: "Pantolon, jean, şort",
+    image: "https://images.unsplash.com/photo-1624378439575-d8705ad7ae80?w=400",
+    href: "/urunler?kategori=alt-giyim",
   },
   {
-    name: "Pantolonlar",
-    slug: "pantolonlar",
-    description: "Rahat ve şık pantolonlar",
-    image: "https://images.unsplash.com/photo-1541099649105-f69ad21f3246?w=600&h=800&fit=crop",
-  },
-  {
-    name: "Ceketler",
-    slug: "ceketler",
-    description: "Mevsime uygun ceketler",
-    image: "https://images.unsplash.com/photo-1551028719-00167b16eac5?w=600&h=800&fit=crop",
+    name: "Aksesuar",
+    slug: "aksesuar",
+    description: "Kemer, çanta, cüzdan, şapka",
+    image: "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=400",
+    href: "/urunler?kategori=aksesuar",
   },
 ];
 
@@ -56,7 +53,7 @@ export default function Categories() {
         </div>
 
         {/* Kategori Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {categories.map((category, index) => (
             <motion.div
               key={category.slug}
@@ -66,7 +63,7 @@ export default function Categories() {
               transition={{ delay: index * 0.1 }}
             >
               <Link
-                href={`/kategori/${category.slug}`}
+                href={category.href}
                 className="group block relative h-[400px] rounded-apple overflow-hidden"
               >
                 {/* Image */}
