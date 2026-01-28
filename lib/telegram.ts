@@ -153,6 +153,38 @@ function formatDate(date: Date | string): string {
   }).format(d);
 }
 
+// Parse simple product caption: "SKU İsim Fiyat" or "SKU | İsim | Fiyat"
+function parseSimpleCaption(caption: string): { sku: string; name: string; price: number } | null {
+  // First try pipe format: "SKU | İsim | Fiyat"
+  if (caption.includes("|")) {
+    const parts = caption.split("|").map(p => p.trim());
+    if (parts.length >= 3) {
+      const price = parseFloat(parts[2]);
+      if (!isNaN(price)) {
+        return { sku: parts[0], name: parts[1], price };
+      }
+    }
+  }
+
+  // Try space format: "SKU İsim1 İsim2 ... Fiyat"
+  // SKU is first word, price is last word (number), name is everything in between
+  const words = caption.trim().split(/\s+/);
+  if (words.length >= 3) {
+    const sku = words[0];
+    const lastWord = words[words.length - 1];
+    const price = parseFloat(lastWord);
+
+    if (!isNaN(price) && price > 0) {
+      const name = words.slice(1, -1).join(" ");
+      if (name.length > 0) {
+        return { sku, name, price };
+      }
+    }
+  }
+
+  return null;
+}
+
 // ==========================================
 // COMMAND HANDLERS
 // ==========================================
@@ -199,8 +231,9 @@ Merhaba! Mağaza yönetim botuna hoş geldiniz.
 /kategoriler - Kategori listesi
 /kategoriekle [isim] - Yeni kategori
 
-💡 <i>Fotoğraf(lar) göndererek hızlıca ürün ekleyebilirsiniz!</i>
-📷 <i>Birden fazla fotoğraf seçip tek seferde gönderebilirsiniz.</i>
+💡 <b>Hızlı Ürün Ekleme:</b>
+Fotoğraf + caption: <code>SKU İsim Fiyat</code>
+Örnek: <code>YLDZ02 Loro Piano Kazak 1200</code>
 `;
   await sendMessage(chatId, message);
 }
@@ -672,30 +705,13 @@ async function handlePhoto(
       data: { photoUrls: [fileUrl] },
     });
 
-    await sendMessage(chatId, `✅ Fotoğraf alındı!\n\nŞimdi ürün bilgilerini tek mesajda gönderin:\n\n<code>SKU | İsim | Fiyat | Kategori | Bedenler</code>\n\nÖrnek:\n<code>ELB003 | Yazlık Elbise | 450 | elbiseler | S,M,L,XL</code>\n\n<i>Bedenler opsiyonel (varsayılan: S,M,L)</i>\n<i>/iptal ile vazgeçebilirsiniz</i>`);
+    await sendMessage(chatId, `✅ Fotoğraf alındı!\n\nŞimdi ürün bilgilerini gönderin:\n\n<code>SKU İsim Fiyat</code>\n\nÖrnek:\n<code>YLDZ02 Loro Piano Kazak 1200</code>\n\n<i>Varsayılan bedenler: S, M, L, XL</i>\n<i>/iptal ile vazgeçebilirsiniz</i>`);
     return;
   }
 
   // Quick product add with caption
   if (caption) {
-    const parts = caption.split("|").map(p => p.trim());
-    if (parts.length >= 3) {
-      const [sku, name, priceStr] = parts;
-      const categorySlug = parts[3] || undefined;
-      const sizesStr = parts[4] || undefined;
-      const price = parseFloat(priceStr);
-
-      const customSizes = sizesStr
-        ? sizesStr.split(",").map(s => s.trim()).filter(s => s.length > 0)
-        : undefined;
-
-      if (sku && name && !isNaN(price)) {
-        await createProductWithPhoto(chatId, sku, name, price, fileUrl, categorySlug, customSizes);
-        return;
-      }
-    }
-
-    // Check for "foto SKU" pattern
+    // Check for "foto SKU" pattern first
     const fotoMatch = caption.match(/^foto\s+([A-Za-z0-9]+)$/i);
     if (fotoMatch) {
       const sku = fotoMatch[1].toUpperCase();
@@ -708,6 +724,13 @@ async function handlePhoto(
         return;
       }
     }
+
+    // Try simple format: "SKU İsim Fiyat" or "SKU | İsim | Fiyat"
+    const parsed = parseSimpleCaption(caption);
+    if (parsed) {
+      await createProductWithPhoto(chatId, parsed.sku, parsed.name, parsed.price, fileUrl);
+      return;
+    }
   }
 
   // Start product add flow
@@ -716,7 +739,7 @@ async function handlePhoto(
     data: { photoUrls: [fileUrl] },
   });
 
-  await sendMessage(chatId, `📷 Fotoğraf alındı!\n\nÜrün bilgilerini gönderin:\n<code>SKU | İsim | Fiyat | Kategori | Bedenler</code>\n\nÖrnek:\n<code>ELB003 | Yazlık Elbise | 450 | elbiseler | S,M,L,XL</code>\n\n<i>Bedenler opsiyonel (varsayılan: S,M,L)</i>`);
+  await sendMessage(chatId, `📷 Fotoğraf alındı!\n\nÜrün bilgilerini gönderin:\n\n<code>SKU İsim Fiyat</code>\n\nÖrnek:\n<code>YLDZ02 Loro Piano Kazak 1200</code>\n\n<i>Varsayılan bedenler: S, M, L, XL</i>`);
 }
 
 // Create product with photo
@@ -729,8 +752,8 @@ async function createProductWithPhoto(
   categorySlug?: string,
   customSizes?: string[]
 ) {
-  // Default sizes or custom sizes
-  const sizes = customSizes && customSizes.length > 0 ? customSizes : ["S", "M", "L"];
+  // Default sizes: S, M, L, XL
+  const sizes = customSizes && customSizes.length > 0 ? customSizes : ["S", "M", "L", "XL"];
 
   // Create product
   const productData: Record<string, unknown> = {
@@ -765,15 +788,17 @@ async function createProductWithPhoto(
   }
 
   // Upload image
+  console.log(`Uploading image for product ${sku}: ${photoUrl}`);
   const imageResult = await apiCall(`/products/${result.data.id}/images/url`, "POST", {
     imageUrl: photoUrl,
     isPrimary: true,
   });
 
   if (imageResult.success) {
-    await sendMessage(chatId, `✅ <b>Ürün eklendi!</b>\n\n📦 SKU: ${sku.toUpperCase()}\n📝 İsim: ${name}\n💰 Fiyat: ${formatCurrency(price)}\n🖼️ Fotoğraf: Yüklendi\n\n<i>Stok eklemek için:</i>\n/stokekle ${sku.toUpperCase()} M 10`);
+    await sendMessage(chatId, `✅ <b>Ürün eklendi!</b>\n\n📦 SKU: ${sku.toUpperCase()}\n📝 İsim: ${name}\n💰 Fiyat: ${formatCurrency(price)}\n📏 Bedenler: ${sizes.join(", ")}\n🖼️ Fotoğraf: Yüklendi\n\n<i>Stok eklemek için:</i>\n/stokekle ${sku.toUpperCase()} M 10`);
   } else {
-    await sendMessage(chatId, `⚠️ Ürün eklendi ama fotoğraf yüklenemedi.\n\nSKU: ${sku.toUpperCase()}`);
+    console.error(`Cloudinary upload failed for ${sku}:`, imageResult.error);
+    await sendMessage(chatId, `⚠️ Ürün eklendi ama fotoğraf yüklenemedi.\n\nSKU: ${sku.toUpperCase()}\n\n<i>Hata: ${imageResult.error?.message || "Cloudinary hatası"}</i>\n\n<i>Fotoğraf eklemek için:</i>\n/foto ${sku.toUpperCase()}`);
   }
 }
 
@@ -806,26 +831,9 @@ async function processMediaGroup(mediaGroupId: string) {
     return;
   }
 
-  // Check if caption has quick product format: "SKU | İsim | Fiyat..."
+  // Check caption for product info
   if (caption) {
-    const parts = caption.split("|").map(p => p.trim());
-    if (parts.length >= 3) {
-      const [sku, name, priceStr] = parts;
-      const categorySlug = parts[3] || undefined;
-      const sizesStr = parts[4] || undefined;
-      const price = parseFloat(priceStr);
-
-      const customSizes = sizesStr
-        ? sizesStr.split(",").map(s => s.trim()).filter(s => s.length > 0)
-        : undefined;
-
-      if (sku && name && !isNaN(price)) {
-        await createProductWithMultiplePhotos(chatId, sku, name, price, photoUrls, categorySlug, customSizes);
-        return;
-      }
-    }
-
-    // Check for "foto SKU" pattern in caption
+    // Check for "foto SKU" pattern first
     const fotoMatch = caption.match(/^foto\s+([A-Za-z0-9]+)$/i);
     if (fotoMatch) {
       const sku = fotoMatch[1].toUpperCase();
@@ -838,6 +846,13 @@ async function processMediaGroup(mediaGroupId: string) {
         return;
       }
     }
+
+    // Try simple format: "SKU İsim Fiyat" or "SKU | İsim | Fiyat"
+    const parsed = parseSimpleCaption(caption);
+    if (parsed) {
+      await createProductWithMultiplePhotos(chatId, parsed.sku, parsed.name, parsed.price, photoUrls);
+      return;
+    }
   }
 
   // Start product add flow with multiple photos
@@ -848,7 +863,7 @@ async function processMediaGroup(mediaGroupId: string) {
 
   await sendMessage(
     chatId,
-    `📷 <b>${photoUrls.length} fotoğraf alındı!</b>\n\nÜrün bilgilerini gönderin:\n<code>SKU | İsim | Fiyat | Kategori | Bedenler</code>\n\nÖrnek:\n<code>ELB003 | Yazlık Elbise | 450 | elbiseler | S,M,L,XL</code>\n\n<i>Bedenler opsiyonel (varsayılan: S,M,L)</i>\n<i>/iptal ile vazgeçebilirsiniz</i>`
+    `📷 <b>${photoUrls.length} fotoğraf alındı!</b>\n\nÜrün bilgilerini gönderin:\n\n<code>SKU İsim Fiyat</code>\n\nÖrnek:\n<code>YLDZ02 Loro Piano Kazak 1200</code>\n\n<i>Varsayılan bedenler: S, M, L, XL</i>\n<i>/iptal ile vazgeçebilirsiniz</i>`
   );
 }
 
@@ -862,7 +877,7 @@ async function createProductWithMultiplePhotos(
   categorySlug?: string,
   customSizes?: string[]
 ) {
-  const sizes = customSizes && customSizes.length > 0 ? customSizes : ["S", "M", "L"];
+  const sizes = customSizes && customSizes.length > 0 ? customSizes : ["S", "M", "L", "XL"];
 
   const productData: Record<string, unknown> = {
     sku: sku.toUpperCase(),
@@ -896,18 +911,30 @@ async function createProductWithMultiplePhotos(
 
   // Upload all images - first one is primary
   let uploadedCount = 0;
+  const errors: string[] = [];
   for (let i = 0; i < photoUrls.length; i++) {
+    console.log(`Uploading image ${i + 1}/${photoUrls.length} for ${sku}: ${photoUrls[i]}`);
     const imageResult = await apiCall(`/products/${result.data.id}/images/url`, "POST", {
       imageUrl: photoUrls[i],
       isPrimary: i === 0,
     });
-    if (imageResult.success) uploadedCount++;
+    if (imageResult.success) {
+      uploadedCount++;
+    } else {
+      console.error(`Cloudinary upload failed for ${sku} image ${i + 1}:`, imageResult.error);
+      errors.push(imageResult.error?.message || `Fotoğraf ${i + 1} yüklenemedi`);
+    }
   }
 
-  await sendMessage(
-    chatId,
-    `✅ <b>Ürün eklendi!</b>\n\n📦 SKU: ${sku.toUpperCase()}\n📝 İsim: ${name}\n💰 Fiyat: ${formatCurrency(price)}\n🖼️ Fotoğraf: ${uploadedCount}/${photoUrls.length} yüklendi\n\n<i>Stok eklemek için:</i>\n/stokekle ${sku.toUpperCase()} M 10`
-  );
+  let message = `✅ <b>Ürün eklendi!</b>\n\n📦 SKU: ${sku.toUpperCase()}\n📝 İsim: ${name}\n💰 Fiyat: ${formatCurrency(price)}\n📏 Bedenler: ${sizes.join(", ")}\n🖼️ Fotoğraf: ${uploadedCount}/${photoUrls.length} yüklendi`;
+
+  if (errors.length > 0) {
+    message += `\n\n⚠️ Bazı fotoğraflar yüklenemedi:\n${errors.slice(0, 3).join("\n")}`;
+  }
+
+  message += `\n\n<i>Stok eklemek için:</i>\n/stokekle ${sku.toUpperCase()} M 10`;
+
+  await sendMessage(chatId, message);
 }
 
 // Add photos to existing product
@@ -918,21 +945,33 @@ async function addPhotosToProduct(
   photoUrls: string[]
 ) {
   let uploadedCount = 0;
-  for (const url of photoUrls) {
+  const errors: string[] = [];
+
+  for (let i = 0; i < photoUrls.length; i++) {
+    console.log(`Adding image ${i + 1}/${photoUrls.length} to ${sku}: ${photoUrls[i]}`);
     const imageResult = await apiCall(`/products/${productId}/images/url`, "POST", {
-      imageUrl: url,
+      imageUrl: photoUrls[i],
       isPrimary: false, // Additional photos are not primary
     });
-    if (imageResult.success) uploadedCount++;
+    if (imageResult.success) {
+      uploadedCount++;
+    } else {
+      console.error(`Cloudinary upload failed for ${sku} image ${i + 1}:`, imageResult.error);
+      errors.push(imageResult.error?.message || `Fotoğraf ${i + 1} yüklenemedi`);
+    }
   }
 
   if (uploadedCount > 0) {
-    await sendMessage(
-      chatId,
-      `✅ <b>Fotoğraflar eklendi!</b>\n\n📦 SKU: ${sku}\n🖼️ ${uploadedCount}/${photoUrls.length} fotoğraf yüklendi\n\n<i>Tüm fotoğrafları görmek için:</i>\n/fotograflar ${sku}`
-    );
+    let message = `✅ <b>Fotoğraflar eklendi!</b>\n\n📦 SKU: ${sku}\n🖼️ ${uploadedCount}/${photoUrls.length} fotoğraf yüklendi`;
+
+    if (errors.length > 0) {
+      message += `\n\n⚠️ Bazı fotoğraflar yüklenemedi:\n${errors.slice(0, 3).join("\n")}`;
+    }
+
+    message += `\n\n<i>Tüm fotoğrafları görmek için:</i>\n/fotograflar ${sku}`;
+    await sendMessage(chatId, message);
   } else {
-    await sendMessage(chatId, `❌ Fotoğraflar yüklenemedi.`);
+    await sendMessage(chatId, `❌ Fotoğraflar yüklenemedi.\n\n<i>Hata: ${errors[0] || "Cloudinary hatası"}</i>`);
   }
 }
 
@@ -1013,51 +1052,24 @@ async function handleTextInput(chatId: number, userId: number, text: string) {
   }
 
   if (state.action === "add_product_info") {
-    const parts = text.split("|").map(p => p.trim());
+    // Try simple format first: "SKU İsim Fiyat" or "SKU | İsim | Fiyat"
+    const parsed = parseSimpleCaption(text);
 
-    if (parts.length < 3) {
-      await sendMessage(chatId, "❌ Geçersiz format.\n\nDoğru format:\n<code>SKU | İsim | Fiyat | Kategori | Bedenler</code>");
+    if (!parsed) {
+      await sendMessage(chatId, "❌ Geçersiz format.\n\nDoğru formatlar:\n<code>SKU İsim Fiyat</code>\n<code>SKU | İsim | Fiyat</code>\n\nÖrnek:\n<code>YLDZ02 Loro Piano Kazak 1200</code>");
       return true;
     }
 
-    const [sku, name, priceStr] = parts;
-    const categorySlug = parts[3] || undefined;
-    const sizesStr = parts[4] || undefined;
-    const price = parseFloat(priceStr);
-
-    const customSizes = sizesStr
-      ? sizesStr.split(",").map(s => s.trim()).filter(s => s.length > 0)
-      : undefined;
-
-    if (!sku || !name || isNaN(price)) {
-      await sendMessage(chatId, "❌ Geçersiz bilgi. SKU, isim ve fiyat zorunludur.");
-      return true;
-    }
+    const { sku, name, price } = parsed;
 
     // Support both single photo (legacy) and multiple photos
     const photoUrls = state.data.photoUrls as string[] | undefined;
     const photoUrl = state.data.photoUrl as string | undefined;
 
     if (photoUrls && photoUrls.length > 0) {
-      await createProductWithMultiplePhotos(
-        chatId,
-        sku,
-        name,
-        price,
-        photoUrls,
-        categorySlug,
-        customSizes
-      );
+      await createProductWithMultiplePhotos(chatId, sku, name, price, photoUrls);
     } else if (photoUrl) {
-      await createProductWithPhoto(
-        chatId,
-        sku,
-        name,
-        price,
-        photoUrl,
-        categorySlug,
-        customSizes
-      );
+      await createProductWithPhoto(chatId, sku, name, price, photoUrl);
     }
 
     userStates.delete(userId);
