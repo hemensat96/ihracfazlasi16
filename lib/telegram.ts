@@ -1436,6 +1436,12 @@ async function handleVideo(
     return;
   }
 
+  // Get thumbnail URL for AI analysis
+  let thumbnailUrl: string | null = null;
+  if (video.thumbnail) {
+    thumbnailUrl = await getFileUrl(video.thumbnail.file_id);
+  }
+
   // Check for "video SKU" pattern in caption
   if (caption) {
     const videoMatch = caption.match(/^video\s+([A-Za-z0-9]+)$/i);
@@ -1450,10 +1456,105 @@ async function handleVideo(
         return;
       }
     }
+
+    // Try simple format: "SKU İsim Fiyat" or "SKU | İsim | Fiyat"
+    const parsed = parseSimpleCaption(caption);
+    if (parsed) {
+      await createProductWithVideo(chatId, parsed.sku, parsed.name, parsed.price, fileUrl, undefined, undefined, userId);
+      return;
+    }
   }
 
-  // Store video for product creation
-  await sendMessage(chatId, "🎬 Video alındı!\n\n<i>Video eklemek için önce ürünü fotoğrafla oluşturun, sonra:</i>\n<code>video SKU</code>\n\nÖrnek: <code>video LCST05</code>");
+  // No caption or couldn't parse - try AI analysis on thumbnail
+  if (thumbnailUrl) {
+    await sendMessage(chatId, "🎬 Video alındı!\n\n🔍 Ürün analiz ediliyor...");
+
+    const analysis = await analyzeProductImage(thumbnailUrl);
+
+    if (analysis && analysis.autoSku) {
+      // Store analysis for later use - fully automatic mode
+      userStates.set(userId, {
+        action: "add_product_auto",
+        data: {
+          photoUrls: [],
+          videoUrls: [fileUrl],
+          thumbnailUrl,
+          analysis,
+        },
+      });
+
+      const brandInfo = analysis.brand ? `<b>${analysis.brand}</b>` : "Bilinmeyen Marka";
+      const confidenceEmoji = analysis.confidence === "high" ? "🎯" : analysis.confidence === "medium" ? "🤔" : "❓";
+      const categoryInfo = analysis.suggestedCategory ? `📁 Kategori: ${analysis.suggestedCategory}\n` : "";
+
+      await sendMessage(
+        chatId,
+        `${confidenceEmoji} <b>Ürün Tanındı!</b>\n\n` +
+        `🏷️ ${analysis.suggestedName}\n\n` +
+        `🔖 SKU: <code>${analysis.autoSku}</code> (otomatik)\n` +
+        `${categoryInfo}` +
+        `🏪 Marka: ${brandInfo}\n` +
+        `👔 Tip: ${analysis.productType}\n` +
+        `🎨 Renk: ${analysis.color}\n` +
+        `🎬 Video: 1 adet\n\n` +
+        `<b>💰 Sadece fiyat girin:</b>\n` +
+        `Örnek: <code>450</code>\n\n` +
+        `<i>Farklı SKU veya isim istiyorsanız:</i>\n` +
+        `<code>[Fiyat] [SKU] [Yeni İsim]</code>\n\n` +
+        `<i>/iptal ile vazgeçebilirsiniz</i>`
+      );
+    } else if (analysis) {
+      // AI worked but couldn't generate SKU - ask for SKU and price
+      userStates.set(userId, {
+        action: "add_product_with_ai",
+        data: {
+          photoUrls: [],
+          videoUrls: [fileUrl],
+          thumbnailUrl,
+          analysis,
+        },
+      });
+
+      const brandInfo = analysis.brand ? `<b>${analysis.brand}</b>` : "Marka belirlenemedi";
+      const confidenceEmoji = analysis.confidence === "high" ? "🎯" : analysis.confidence === "medium" ? "🤔" : "❓";
+      const categoryInfo = analysis.suggestedCategory ? `\n📁 Kategori: ${analysis.suggestedCategory}` : "";
+
+      await sendMessage(
+        chatId,
+        `${confidenceEmoji} <b>Ürün Tanındı!</b>\n\n` +
+        `🏷️ Marka: ${brandInfo}\n` +
+        `👔 Tip: ${analysis.productType}\n` +
+        `🎨 Renk: ${analysis.color}${categoryInfo}\n` +
+        `🎬 Video: 1 adet\n\n` +
+        `📝 <b>Önerilen İsim:</b>\n${analysis.suggestedName}\n\n` +
+        `<b>SKU ve Fiyat girin:</b>\n<code>[SKU] [Fiyat]</code>\n\n` +
+        `Örnek: <code>TH001 450</code>\n\n` +
+        `<i>/iptal ile vazgeçebilirsiniz</i>`
+      );
+    } else {
+      // No AI or failed - fallback to manual
+      userStates.set(userId, {
+        action: "add_product_info",
+        data: { photoUrls: [], videoUrls: [fileUrl], thumbnailUrl },
+      });
+
+      await sendMessage(
+        chatId,
+        `🎬 Video alındı!\n\nÜrün bilgilerini gönderin:\n\n<code>SKU İsim Fiyat</code>\n\nÖrnek:\n<code>YLDZ02 Loro Piano Kazak 1200</code>\n\n<i>Varsayılan bedenler: S, M, L, XL, XXL</i>\n<i>/iptal ile vazgeçebilirsiniz</i>`
+      );
+    }
+  } else {
+    // No thumbnail available - fallback to manual entry
+    userStates.set(userId, {
+      action: "add_product_info",
+      data: { photoUrls: [], videoUrls: [fileUrl] },
+    });
+
+    await sendMessage(
+      chatId,
+      `🎬 Video alındı!\n\nÜrün bilgilerini gönderin:\n\n<code>SKU İsim Fiyat</code>\n\nÖrnek:\n<code>YLDZ02 Loro Piano Kazak 1200</code>\n\n<i>Varsayılan bedenler: S, M, L, XL, XXL</i>\n<i>/iptal ile vazgeçebilirsiniz</i>`
+    );
+  }
 }
 
 // Add video to existing product
@@ -1543,6 +1644,95 @@ async function createProductWithPhoto(
   } else {
     console.error(`Cloudinary upload failed for ${sku}:`, imageResult.error);
     message = `⚠️ Ürün eklendi ama fotoğraf yüklenemedi.\n\n📦 SKU: <code>${sku.toUpperCase()}</code>\n📏 Bedenler: ${sizes.join(", ")}\n\n<i>Hata: ${imageResult.error?.message || "Cloudinary hatası"}</i>`;
+  }
+
+  // Ask for stock entry
+  message += `\n\n📦 <b>Stok girin (seri format):</b>\nÖrnek: <code>1 2 3 2 1</code>\n(S=1, M=2, L=3, XL=2, XXL=1)\n\nVeya tek sayı: <code>5</code>\n(Tüm bedenlere 5 adet)\n\n<i>/atla ile stok girişini atlayabilirsiniz</i>`;
+
+  await sendMessage(chatId, message);
+
+  // Set state to wait for stock entry
+  if (userId) {
+    userStates.set(userId, {
+      action: "add_stock_serial",
+      data: { sku: sku.toUpperCase(), sizes },
+    });
+  }
+}
+
+// Create product with video (and optional thumbnail as photo)
+async function createProductWithVideo(
+  chatId: number,
+  sku: string,
+  name: string,
+  price: number,
+  videoUrl: string,
+  categorySlug?: string,
+  customSizes?: string[],
+  userId?: number,
+  thumbnailUrl?: string
+) {
+  // Default sizes: S, M, L, XL, XXL
+  const sizes = customSizes && customSizes.length > 0 ? customSizes : DEFAULT_SIZES;
+
+  // Create product
+  const productData: Record<string, unknown> = {
+    sku: sku.toUpperCase(),
+    name,
+    price,
+    variants: sizes.map(size => ({
+      size: size.toUpperCase(),
+      color: "Standart",
+      stock: 0,
+    })),
+  };
+
+  // Get category ID if provided
+  if (categorySlug) {
+    const catResult = await apiCall("/categories");
+    if (catResult.success && catResult.data) {
+      const category = catResult.data.find((c: { slug: string }) =>
+        c.slug.toLowerCase() === categorySlug.toLowerCase()
+      );
+      if (category) {
+        productData.categoryId = category.id;
+      }
+    }
+  }
+
+  const result = await apiCall("/products", "POST", productData);
+
+  if (!result.success) {
+    await sendMessage(chatId, `❌ Ürün eklenemedi: ${result.error?.message || "Bilinmeyen hata"}`);
+    return;
+  }
+
+  let message = `✅ <b>Ürün eklendi!</b>\n\n📦 SKU: <code>${sku.toUpperCase()}</code>\n📝 İsim: ${name}\n💰 Fiyat: ${formatCurrency(price)}\n📏 Bedenler: ${sizes.join(", ")}`;
+
+  // Upload thumbnail as primary image if available
+  if (thumbnailUrl) {
+    console.log(`Uploading thumbnail for product ${sku}: ${thumbnailUrl}`);
+    const imageResult = await apiCall(`/products/${result.data.id}/images/url`, "POST", {
+      imageUrl: thumbnailUrl,
+      isPrimary: true,
+    });
+    if (imageResult.success) {
+      message += `\n🖼️ Kapak: Yüklendi`;
+    }
+  }
+
+  // Upload video
+  console.log(`Uploading video for product ${sku}: ${videoUrl}`);
+  const videoResult = await apiCall(`/products/${result.data.id}/videos/url`, "POST", {
+    videoUrl,
+    isPrimary: false,
+  });
+
+  if (videoResult.success) {
+    message += `\n🎬 Video: Yüklendi`;
+  } else {
+    console.error(`Video upload failed for ${sku}:`, videoResult.error);
+    message += `\n⚠️ Video yüklenemedi: ${videoResult.error?.message || "Bilinmeyen hata"}`;
   }
 
   // Ask for stock entry
@@ -1954,10 +2144,14 @@ async function handleTextInput(chatId: number, userId: number, text: string) {
     // Support both single photo (legacy) and multiple photos
     const photoUrls = state.data.photoUrls as string[] | undefined;
     const videoUrls = (state.data.videoUrls as string[]) || [];
+    const thumbnailUrl = state.data.thumbnailUrl as string | undefined;
     const photoUrl = state.data.photoUrl as string | undefined;
 
     if (photoUrls && photoUrls.length > 0) {
       await createProductWithMultiplePhotos(chatId, sku, name, price, photoUrls, undefined, undefined, userId, videoUrls);
+    } else if (videoUrls.length > 0) {
+      // Only video(s), no photos - use video with thumbnail
+      await createProductWithVideo(chatId, sku, name, price, videoUrls[0], undefined, undefined, userId, thumbnailUrl);
     } else if (photoUrl) {
       await createProductWithPhoto(chatId, sku, name, price, photoUrl, undefined, undefined, userId);
     }
@@ -1971,6 +2165,7 @@ async function handleTextInput(chatId: number, userId: number, text: string) {
     const analysis = state.data.analysis as ProductAnalysis;
     const photoUrls = state.data.photoUrls as string[];
     const videoUrls = (state.data.videoUrls as string[]) || [];
+    const thumbnailUrl = state.data.thumbnailUrl as string | undefined;
 
     const words = text.trim().split(/\s+/);
     const firstWord = words[0];
@@ -2006,9 +2201,14 @@ async function handleTextInput(chatId: number, userId: number, text: string) {
     // Use suggested category name (will be auto-created if needed)
     const categoryName = analysis.suggestedCategory || undefined;
 
-    await createProductWithMultiplePhotos(chatId, sku, productName, price, photoUrls, categoryName, undefined, userId, videoUrls);
+    if (photoUrls && photoUrls.length > 0) {
+      await createProductWithMultiplePhotos(chatId, sku, productName, price, photoUrls, categoryName, undefined, userId, videoUrls);
+    } else if (videoUrls.length > 0) {
+      // Only video(s), no photos - use video with thumbnail
+      await createProductWithVideo(chatId, sku, productName, price, videoUrls[0], analysis.suggestedCategorySlug || undefined, undefined, userId, thumbnailUrl || undefined);
+    }
 
-    // Don't delete state - createProductWithMultiplePhotos sets new state for stock entry
+    // Don't delete state - create functions set new state for stock entry
     return true;
   }
 
@@ -2017,6 +2217,7 @@ async function handleTextInput(chatId: number, userId: number, text: string) {
     const analysis = state.data.analysis as ProductAnalysis;
     const photoUrls = state.data.photoUrls as string[];
     const videoUrls = (state.data.videoUrls as string[]) || [];
+    const thumbnailUrl = state.data.thumbnailUrl as string | undefined;
 
     // Parse input: "SKU Fiyat" or "SKU Fiyat Custom Name Here"
     const words = text.trim().split(/\s+/);
@@ -2041,9 +2242,14 @@ async function handleTextInput(chatId: number, userId: number, text: string) {
     // Use suggested category name (will be auto-created if needed)
     const categoryName = analysis.suggestedCategory || undefined;
 
-    await createProductWithMultiplePhotos(chatId, sku, productName, price, photoUrls, categoryName, undefined, userId, videoUrls);
+    if (photoUrls && photoUrls.length > 0) {
+      await createProductWithMultiplePhotos(chatId, sku, productName, price, photoUrls, categoryName, undefined, userId, videoUrls);
+    } else if (videoUrls.length > 0) {
+      // Only video(s), no photos - use video with thumbnail
+      await createProductWithVideo(chatId, sku, productName, price, videoUrls[0], analysis.suggestedCategorySlug || undefined, undefined, userId, thumbnailUrl || undefined);
+    }
 
-    // Don't delete state - createProductWithMultiplePhotos sets new state for stock entry
+    // Don't delete state - create functions set new state for stock entry
     return true;
   }
 
