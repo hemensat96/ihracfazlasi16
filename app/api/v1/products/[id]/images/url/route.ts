@@ -9,9 +9,9 @@ interface RouteContext {
 }
 
 const uploadFromUrlSchema = z.object({
-  // Support both camelCase and snake_case
-  image_url: z.string().url("Geçerli bir URL girin").optional(),
-  imageUrl: z.string().url("Geçerli bir URL girin").optional(),
+  // Support both camelCase and snake_case - use string() instead of url() for Telegram URLs
+  image_url: z.string().min(1, "URL gerekli").optional(),
+  imageUrl: z.string().min(1, "URL gerekli").optional(),
   is_primary: z.boolean().optional(),
   isPrimary: z.boolean().optional(),
 }).refine(data => data.image_url || data.imageUrl, {
@@ -42,13 +42,16 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
 
     const body = await request.json();
+    console.log(`[Image Upload] Request body:`, JSON.stringify(body));
+
     const validation = uploadFromUrlSchema.safeParse(body);
 
     if (!validation.success) {
+      console.error(`[Image Upload] Validation error:`, validation.error.errors);
       return errorResponse(
         "VALIDATION_ERROR",
         "Geçersiz veri",
-        validation.error.errors.map((e) => e.message).join(", ")
+        validation.error.errors.map((e) => `${e.path.join(".")}: ${e.message}`).join(", ")
       );
     }
 
