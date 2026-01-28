@@ -2648,6 +2648,14 @@ export async function handleUpdate(update: TelegramUpdate) {
       case "/onayla":
         await handleOnayla(chatId, userId);
         break;
+      case "/iptal":
+        if (userStates.has(userId)) {
+          userStates.delete(userId);
+          await sendMessage(chatId, "❌ İşlem iptal edildi.");
+        } else {
+          await sendMessage(chatId, "ℹ️ İptal edilecek bir işlem yok.");
+        }
+        break;
       case "/foto":
         await handleFoto(chatId, userId, args);
         break;
