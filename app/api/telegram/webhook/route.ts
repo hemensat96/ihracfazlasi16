@@ -41,8 +41,14 @@ export async function GET(request: NextRequest) {
   }
 
   if (action === "set") {
-    // Set webhook - use WEBHOOK_URL if set, otherwise use VERCEL_URL
-    const webhookUrl = process.env.WEBHOOK_URL || `https://${process.env.VERCEL_URL}/api/telegram/webhook`;
+    // Set webhook - use NEXT_PUBLIC_SITE_URL or fallback
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.RAILWAY_PUBLIC_DOMAIN || "https://ihracfazlasigiyim.com";
+    const webhookUrl = `${baseUrl}/api/telegram/webhook`;
+
+    console.log("NEXT_PUBLIC_SITE_URL:", process.env.NEXT_PUBLIC_SITE_URL);
+    console.log("RAILWAY_PUBLIC_DOMAIN:", process.env.RAILWAY_PUBLIC_DOMAIN);
+    console.log("webhookUrl:", webhookUrl);
+
     const response = await fetch(
       `https://api.telegram.org/bot${BOT_TOKEN}/setWebhook`,
       {
@@ -56,7 +62,16 @@ export async function GET(request: NextRequest) {
       }
     );
     const result = await response.json();
-    return NextResponse.json({ action: "setWebhook", webhookUrl, result });
+    return NextResponse.json({
+      action: "setWebhook",
+      webhookUrl,
+      baseUrl,
+      envVars: {
+        NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL || "undefined",
+        RAILWAY_PUBLIC_DOMAIN: process.env.RAILWAY_PUBLIC_DOMAIN || "undefined",
+      },
+      result
+    });
   }
 
   if (action === "delete") {
