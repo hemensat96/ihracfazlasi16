@@ -42,8 +42,8 @@ export default async function HomePage() {
   return (
     <>
       <Hero />
-      <PromoVideo />
       <Categories />
+      <PromoVideo />
       <FeaturedProducts
         products={featuredProducts}
         title="Yeni Gelenler"
