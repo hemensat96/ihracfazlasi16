@@ -194,6 +194,7 @@ interface ProductAnalysis {
   suggestedCategorySlug: string | null;
   autoSku: string | null;
   confidence: "high" | "medium" | "low";
+  isPackaging?: boolean; // true if image shows packaging (bag, box) instead of actual product
 }
 
 // Ledger entry for cash book analysis
@@ -384,18 +385,30 @@ async function analyzeProductImage(imageUrl: string, prefetchedData?: { base64: 
               },
               {
                 type: "text",
-                text: `Bu erkek giyim ürününü analiz et. Bilinen markalar: ${KNOWN_BRANDS.join(", ")}.
+                text: `Bu görseli analiz et. Bilinen markalar: ${KNOWN_BRANDS.join(", ")}.
+
+ÖNEMLİ: Eğer görselde giysi/ürün değil de:
+- Marka poşeti/torbası (shopping bag)
+- Ürün kutusu/ambalajı
+- Sadece etiket/logo
+görüyorsan, bunu belirt.
 
 JSON formatında yanıt ver (başka bir şey yazma):
 {
   "brand": "marka adı veya null",
-  "productType": "ürün tipi (t-shirt, gömlek, kazak, ceket, pantolon, vb.)",
+  "productType": "ürün tipi (t-shirt, gömlek, kazak, ceket, pantolon, poşet, kutu, aksesuar vb.)",
   "color": "renk (lacivert, beyaz, siyah, gri, vb.)",
-  "suggestedName": "Profesyonel ürün adı örn: Tommy Hilfiger Erkek Lacivert Polo Yaka T-Shirt",
-  "confidence": "high/medium/low - marka görünürlüğüne göre"
+  "suggestedName": "Profesyonel ürün adı",
+  "isPackaging": true/false - poşet, kutu veya ambalaj mı?,
+  "confidence": "high/medium/low"
 }
 
-Logo veya marka etiketi görünüyorsa confidence: high
+Örnekler:
+- Giysi görünüyorsa: "Tommy Hilfiger Erkek Lacivert Polo Yaka T-Shirt"
+- Poşet görünüyorsa: "Loro Piana Marka Poşeti" ve isPackaging: true
+- Aksesuar görünüyorsa: "Lacoste Erkek Deri Kemer" ve productType: "kemer"
+
+Logo veya marka etiketi net görünüyorsa confidence: high
 Stil benzerse ama logo net değilse: medium
 Marka belirsizse: low ve brand: null`,
               },
@@ -420,19 +433,25 @@ Marka belirsizse: low ve brand: null`,
 
     const analysis = JSON.parse(jsonMatch[0]) as ProductAnalysis;
 
-    // Find matching main category (Üst Giyim, Alt Giyim, Aksesuar)
-    const lowerProductType = analysis.productType.toLowerCase();
-    for (const cat of MAIN_CATEGORIES) {
-      if (cat.keywords.some(k => lowerProductType.includes(k))) {
-        analysis.suggestedCategory = cat.name;
-        analysis.suggestedCategorySlug = cat.slug;
-        break;
+    // If it's packaging (bag, box), set to Aksesuar category
+    if (analysis.isPackaging) {
+      analysis.suggestedCategory = "Aksesuar";
+      analysis.suggestedCategorySlug = "aksesuar";
+    } else {
+      // Find matching main category (Üst Giyim, Alt Giyim, Aksesuar)
+      const lowerProductType = analysis.productType.toLowerCase();
+      for (const cat of MAIN_CATEGORIES) {
+        if (cat.keywords.some(k => lowerProductType.includes(k))) {
+          analysis.suggestedCategory = cat.name;
+          analysis.suggestedCategorySlug = cat.slug;
+          break;
+        }
       }
-    }
-    // Default to Üst Giyim if no match found
-    if (!analysis.suggestedCategory) {
-      analysis.suggestedCategory = "Üst Giyim";
-      analysis.suggestedCategorySlug = "ust-giyim";
+      // Default to Üst Giyim if no match found
+      if (!analysis.suggestedCategory) {
+        analysis.suggestedCategory = "Üst Giyim";
+        analysis.suggestedCategorySlug = "ust-giyim";
+      }
     }
 
     // Generate auto SKU based on brand
@@ -1337,6 +1356,7 @@ async function handlePhoto(
     const brandInfo = analysis.brand ? `<b>${analysis.brand}</b>` : "Bilinmeyen Marka";
     const confidenceEmoji = analysis.confidence === "high" ? "🎯" : analysis.confidence === "medium" ? "🤔" : "❓";
     const categoryInfo = analysis.suggestedCategory ? `📁 Kategori: ${analysis.suggestedCategory}\n` : "";
+    const packagingWarning = analysis.isPackaging ? `\n⚠️ <i>Bu bir poşet/ambalaj gibi görünüyor. Ürün değilse /iptal yazın.</i>\n` : "";
 
     await sendMessage(
       chatId,
@@ -1346,7 +1366,7 @@ async function handlePhoto(
       `${categoryInfo}` +
       `🏪 Marka: ${brandInfo}\n` +
       `👔 Tip: ${analysis.productType}\n` +
-      `🎨 Renk: ${analysis.color}\n\n` +
+      `🎨 Renk: ${analysis.color}${packagingWarning}\n\n` +
       `<b>💰 Sadece fiyat girin:</b>\n` +
       `Örnek: <code>450</code>\n\n` +
       `<i>Farklı SKU veya isim istiyorsanız:</i>\n` +
@@ -1366,13 +1386,14 @@ async function handlePhoto(
     const brandInfo = analysis.brand ? `<b>${analysis.brand}</b>` : "Marka belirlenemedi";
     const confidenceEmoji = analysis.confidence === "high" ? "🎯" : analysis.confidence === "medium" ? "🤔" : "❓";
     const categoryInfo = analysis.suggestedCategory ? `\n📁 Kategori: ${analysis.suggestedCategory}` : "";
+    const packagingWarning = analysis.isPackaging ? `\n\n⚠️ <i>Bu bir poşet/ambalaj gibi görünüyor. Ürün değilse /iptal yazın.</i>` : "";
 
     await sendMessage(
       chatId,
       `${confidenceEmoji} <b>Ürün Tanındı!</b>\n\n` +
       `🏷️ Marka: ${brandInfo}\n` +
       `👔 Tip: ${analysis.productType}\n` +
-      `🎨 Renk: ${analysis.color}${categoryInfo}\n\n` +
+      `🎨 Renk: ${analysis.color}${categoryInfo}${packagingWarning}\n\n` +
       `📝 <b>Önerilen İsim:</b>\n${analysis.suggestedName}\n\n` +
       `<b>SKU ve Fiyat girin:</b>\n<code>[SKU] [Fiyat]</code>\n\n` +
       `Örnek: <code>TH001 450</code>\n\n` +
@@ -1669,8 +1690,7 @@ async function createProductWithVideo(
   videoUrl: string,
   categorySlug?: string,
   customSizes?: string[],
-  userId?: number,
-  thumbnailUrl?: string
+  userId?: number
 ) {
   // Default sizes: S, M, L, XL, XXL
   const sizes = customSizes && customSizes.length > 0 ? customSizes : DEFAULT_SIZES;
@@ -1709,19 +1729,7 @@ async function createProductWithVideo(
 
   let message = `✅ <b>Ürün eklendi!</b>\n\n📦 SKU: <code>${sku.toUpperCase()}</code>\n📝 İsim: ${name}\n💰 Fiyat: ${formatCurrency(price)}\n📏 Bedenler: ${sizes.join(", ")}`;
 
-  // Upload thumbnail as primary image if available
-  if (thumbnailUrl) {
-    console.log(`Uploading thumbnail for product ${sku}: ${thumbnailUrl}`);
-    const imageResult = await apiCall(`/products/${result.data.id}/images/url`, "POST", {
-      imageUrl: thumbnailUrl,
-      isPrimary: true,
-    });
-    if (imageResult.success) {
-      message += `\n🖼️ Kapak: Yüklendi`;
-    }
-  }
-
-  // Upload video
+  // Upload video only (no thumbnail - user can add photos later)
   console.log(`Uploading video for product ${sku}: ${videoUrl}`);
   const videoResult = await apiCall(`/products/${result.data.id}/videos/url`, "POST", {
     videoUrl,
@@ -2151,7 +2159,7 @@ async function handleTextInput(chatId: number, userId: number, text: string) {
       await createProductWithMultiplePhotos(chatId, sku, name, price, photoUrls, undefined, undefined, userId, videoUrls);
     } else if (videoUrls.length > 0) {
       // Only video(s), no photos - use video with thumbnail
-      await createProductWithVideo(chatId, sku, name, price, videoUrls[0], undefined, undefined, userId, thumbnailUrl);
+      await createProductWithVideo(chatId, sku, name, price, videoUrls[0], undefined, undefined, userId);
     } else if (photoUrl) {
       await createProductWithPhoto(chatId, sku, name, price, photoUrl, undefined, undefined, userId);
     }
@@ -2205,7 +2213,7 @@ async function handleTextInput(chatId: number, userId: number, text: string) {
       await createProductWithMultiplePhotos(chatId, sku, productName, price, photoUrls, categoryName, undefined, userId, videoUrls);
     } else if (videoUrls.length > 0) {
       // Only video(s), no photos - use video with thumbnail
-      await createProductWithVideo(chatId, sku, productName, price, videoUrls[0], analysis.suggestedCategorySlug || undefined, undefined, userId, thumbnailUrl || undefined);
+      await createProductWithVideo(chatId, sku, productName, price, videoUrls[0], analysis.suggestedCategorySlug || undefined, undefined, userId);
     }
 
     // Don't delete state - create functions set new state for stock entry
@@ -2246,7 +2254,7 @@ async function handleTextInput(chatId: number, userId: number, text: string) {
       await createProductWithMultiplePhotos(chatId, sku, productName, price, photoUrls, categoryName, undefined, userId, videoUrls);
     } else if (videoUrls.length > 0) {
       // Only video(s), no photos - use video with thumbnail
-      await createProductWithVideo(chatId, sku, productName, price, videoUrls[0], analysis.suggestedCategorySlug || undefined, undefined, userId, thumbnailUrl || undefined);
+      await createProductWithVideo(chatId, sku, productName, price, videoUrls[0], analysis.suggestedCategorySlug || undefined, undefined, userId);
     }
 
     // Don't delete state - create functions set new state for stock entry
