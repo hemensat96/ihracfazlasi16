@@ -6,23 +6,41 @@ const SITE_API = process.env.TELEGRAM_SITE_API || `${SITE_URL}/api/v1`;
 const API_KEY = process.env.API_SECRET_KEY || "";
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
 
-// Known brands we sell
-const KNOWN_BRANDS = [
-  "Prada", "Lacoste", "Tommy Hilfiger", "Hugo Boss", "Armani",
-  "Versace", "Calvin Klein", "Ralph Lauren", "Gucci", "Burberry",
-  "Polo Ralph Lauren", "Emporio Armani", "Giorgio Armani", "Boss",
-  "Tommy Jeans", "CK", "Loro Piana", "Zegna", "Canali", "Brioni"
-];
+// Known brands we sell with SKU prefixes
+const BRAND_SKU_MAP: Record<string, string> = {
+  "prada": "PRD",
+  "lacoste": "LCST",
+  "tommy hilfiger": "TH",
+  "tommy jeans": "TJ",
+  "hugo boss": "HB",
+  "boss": "HB",
+  "armani": "ARM",
+  "emporio armani": "ARM",
+  "giorgio armani": "ARM",
+  "versace": "VRS",
+  "calvin klein": "CK",
+  "ck": "CK",
+  "ralph lauren": "RL",
+  "polo ralph lauren": "RL",
+  "gucci": "GC",
+  "burberry": "BRB",
+  "loro piana": "LP",
+  "zegna": "ZGN",
+  "canali": "CNL",
+  "brioni": "BRN",
+};
+
+const KNOWN_BRANDS = Object.keys(BRAND_SKU_MAP).map(b => b.charAt(0).toUpperCase() + b.slice(1));
 
 // Product categories
 const PRODUCT_CATEGORIES = [
-  { name: "T-Shirt & Polo", keywords: ["t-shirt", "tişört", "polo", "tshirt"] },
-  { name: "Gömlek", keywords: ["gömlek", "shirt", "camicia"] },
-  { name: "Kazak & Triko", keywords: ["kazak", "triko", "sweater", "knitwear", "örgü"] },
-  { name: "Ceket & Mont", keywords: ["ceket", "mont", "jacket", "coat", "blazer"] },
-  { name: "Pantolon", keywords: ["pantolon", "pants", "trousers", "chino"] },
-  { name: "Şort", keywords: ["şort", "shorts", "bermuda"] },
-  { name: "Sweatshirt", keywords: ["sweatshirt", "hoodie", "kapüşonlu"] },
+  { name: "T-Shirt & Polo", slug: "t-shirt-polo", keywords: ["t-shirt", "tişört", "polo", "tshirt"] },
+  { name: "Gömlek", slug: "gomlek", keywords: ["gömlek", "shirt", "camicia"] },
+  { name: "Kazak & Triko", slug: "kazak-triko", keywords: ["kazak", "triko", "sweater", "knitwear", "örgü"] },
+  { name: "Ceket & Mont", slug: "ceket-mont", keywords: ["ceket", "mont", "jacket", "coat", "blazer"] },
+  { name: "Pantolon", slug: "pantolon", keywords: ["pantolon", "pants", "trousers", "chino"] },
+  { name: "Şort", slug: "sort", keywords: ["şort", "shorts", "bermuda"] },
+  { name: "Sweatshirt", slug: "sweatshirt", keywords: ["sweatshirt", "hoodie", "kapüşonlu"] },
 ];
 
 // Types
@@ -148,7 +166,52 @@ interface ProductAnalysis {
   color: string;
   suggestedName: string;
   suggestedCategory: string | null;
+  suggestedCategorySlug: string | null;
+  autoSku: string | null;
   confidence: "high" | "medium" | "low";
+}
+
+// Get SKU prefix for brand
+function getBrandSkuPrefix(brand: string | null): string {
+  if (!brand) return "URN";
+  const lowerBrand = brand.toLowerCase();
+  // Check for partial matches too
+  for (const [key, prefix] of Object.entries(BRAND_SKU_MAP)) {
+    if (lowerBrand.includes(key) || key.includes(lowerBrand)) {
+      return prefix;
+    }
+  }
+  return BRAND_SKU_MAP[lowerBrand] || "URN";
+}
+
+// Generate next SKU for brand prefix
+async function generateNextSku(prefix: string): Promise<string> {
+  try {
+    // Get all products with this prefix
+    const result = await apiCall(`/products?limit=1000`);
+    if (!result.success || !result.data) {
+      return `${prefix}01`;
+    }
+
+    // Find highest number for this prefix
+    let maxNum = 0;
+    for (const product of result.data) {
+      const sku = product.sku?.toUpperCase() || "";
+      if (sku.startsWith(prefix)) {
+        const numPart = sku.replace(prefix, "");
+        const num = parseInt(numPart);
+        if (!isNaN(num) && num > maxNum) {
+          maxNum = num;
+        }
+      }
+    }
+
+    // Return next number with zero padding
+    const nextNum = maxNum + 1;
+    return `${prefix}${nextNum.toString().padStart(2, "0")}`;
+  } catch {
+    return `${prefix}01`;
+  }
 }
 
 // Analyze product image with Claude Vision API
@@ -230,9 +293,16 @@ Marka belirsizse: low ve brand: null`,
     for (const cat of PRODUCT_CATEGORIES) {
       if (cat.keywords.some(k => lowerProductType.includes(k))) {
         analysis.suggestedCategory = cat.name;
+        analysis.suggestedCategorySlug = cat.slug;
         break;
       }
     }
+
+    // Generate auto SKU based on brand
+    const skuPrefix = getBrandSkuPrefix(analysis.brand);
+    analysis.autoSku = await generateNextSku(skuPrefix);
+
+    console.log(`[AI Analysis] Brand: ${analysis.brand}, SKU Prefix: ${skuPrefix}, Auto SKU: ${analysis.autoSku}`);
 
     return analysis;
   } catch (error) {
@@ -316,6 +386,13 @@ async function handleStart(chatId: number) {
 
 Merhaba! Mağaza yönetim botuna hoş geldiniz.
 
+<b>🚀 TAM OTOMATİK ÜRÜN EKLEME</b>
+1. Sadece fotoğraf gönderin
+2. AI markayı, tipi ve rengi tanır
+3. SKU otomatik oluşturulur
+4. Sadece fiyat yazın: <code>450</code>
+5. Ürün eklendi!
+
 <b>📦 ÜRÜN YÖNETİMİ</b>
 /urunekle - Yeni ürün ekle
 /urunler - Ürün listesi
@@ -351,7 +428,7 @@ Merhaba! Mağaza yönetim botuna hoş geldiniz.
 /kategoriler - Kategori listesi
 /kategoriekle [isim] - Yeni kategori
 
-💡 <b>Hızlı Ürün Ekleme:</b>
+💡 <b>Hızlı Ürün Ekleme (Manuel):</b>
 Fotoğraf + caption: <code>SKU İsim Fiyat</code>
 Örnek: <code>YLDZ02 Loro Piano Kazak 1200</code>
 `;
@@ -858,8 +935,37 @@ async function handlePhoto(
 
   const analysis = await analyzeProductImage(fileUrl);
 
-  if (analysis) {
-    // Store analysis for later use
+  if (analysis && analysis.autoSku) {
+    // Store analysis for later use - fully automatic mode
+    userStates.set(userId, {
+      action: "add_product_auto",
+      data: {
+        photoUrls: [fileUrl],
+        analysis,
+      },
+    });
+
+    const brandInfo = analysis.brand ? `<b>${analysis.brand}</b>` : "Bilinmeyen Marka";
+    const confidenceEmoji = analysis.confidence === "high" ? "🎯" : analysis.confidence === "medium" ? "🤔" : "❓";
+    const categoryInfo = analysis.suggestedCategory ? `📁 Kategori: ${analysis.suggestedCategory}\n` : "";
+
+    await sendMessage(
+      chatId,
+      `${confidenceEmoji} <b>Ürün Tanındı!</b>\n\n` +
+      `🏷️ ${analysis.suggestedName}\n\n` +
+      `🔖 SKU: <code>${analysis.autoSku}</code> (otomatik)\n` +
+      `${categoryInfo}` +
+      `🏪 Marka: ${brandInfo}\n` +
+      `👔 Tip: ${analysis.productType}\n` +
+      `🎨 Renk: ${analysis.color}\n\n` +
+      `<b>💰 Sadece fiyat girin:</b>\n` +
+      `Örnek: <code>450</code>\n\n` +
+      `<i>Farklı SKU veya isim istiyorsanız:</i>\n` +
+      `<code>[Fiyat] [SKU] [Yeni İsim]</code>\n\n` +
+      `<i>/iptal ile vazgeçebilirsiniz</i>`
+    );
+  } else if (analysis) {
+    // AI worked but couldn't generate SKU - ask for SKU and price
     userStates.set(userId, {
       action: "add_product_with_ai",
       data: {
@@ -881,7 +987,6 @@ async function handlePhoto(
       `📝 <b>Önerilen İsim:</b>\n${analysis.suggestedName}\n\n` +
       `<b>SKU ve Fiyat girin:</b>\n<code>[SKU] [Fiyat]</code>\n\n` +
       `Örnek: <code>TH001 450</code>\n\n` +
-      `<i>Farklı isim için:</i>\n<code>[SKU] [Fiyat] [İsim]</code>\n\n` +
       `<i>/iptal ile vazgeçebilirsiniz</i>`
     );
   } else {
@@ -1229,6 +1334,51 @@ async function handleTextInput(chatId: number, userId: number, text: string) {
     return true;
   }
 
+  // Fully automatic product creation: just price, or "price sku name"
+  if (state.action === "add_product_auto") {
+    const analysis = state.data.analysis as ProductAnalysis;
+    const photoUrls = state.data.photoUrls as string[];
+
+    const words = text.trim().split(/\s+/);
+    const firstWord = words[0];
+    const price = parseFloat(firstWord);
+
+    // Validate price
+    if (isNaN(price) || price <= 0) {
+      await sendMessage(chatId, "❌ Geçersiz fiyat. Sayı girin.\n\nÖrnek: <code>450</code>");
+      return true;
+    }
+
+    // Use auto SKU by default, or custom if provided
+    let sku = analysis.autoSku || "URN01";
+    let productName = analysis.suggestedName;
+
+    // If user provided more than just price: "450 TH001 Custom Name"
+    if (words.length >= 2) {
+      // Second word might be custom SKU
+      const possibleSku = words[1].toUpperCase();
+      // Check if it looks like a SKU (alphanumeric, 2-10 chars)
+      if (/^[A-Z0-9]{2,10}$/.test(possibleSku)) {
+        sku = possibleSku;
+        // Rest is custom name
+        if (words.length > 2) {
+          productName = words.slice(2).join(" ");
+        }
+      } else {
+        // Not a SKU, treat as part of custom name
+        productName = words.slice(1).join(" ");
+      }
+    }
+
+    // Use suggested category slug
+    const categorySlug = analysis.suggestedCategorySlug || undefined;
+
+    await createProductWithMultiplePhotos(chatId, sku, productName, price, photoUrls, categorySlug);
+
+    userStates.delete(userId);
+    return true;
+  }
+
   // AI-assisted product creation: "SKU Fiyat" or "SKU Fiyat Farklı İsim"
   if (state.action === "add_product_with_ai") {
     const analysis = state.data.analysis as ProductAnalysis;
@@ -1254,20 +1404,8 @@ async function handleTextInput(chatId: number, userId: number, text: string) {
     const customName = words.length > 2 ? words.slice(2).join(" ") : null;
     const productName = customName || analysis.suggestedName;
 
-    // Find category slug
-    let categorySlug: string | undefined;
-    if (analysis.suggestedCategory) {
-      const catResult = await apiCall("/categories");
-      if (catResult.success && catResult.data) {
-        const category = catResult.data.find((c: { name: string }) =>
-          c.name.toLowerCase().includes(analysis.suggestedCategory!.toLowerCase()) ||
-          analysis.suggestedCategory!.toLowerCase().includes(c.name.toLowerCase())
-        );
-        if (category) {
-          categorySlug = category.slug;
-        }
-      }
-    }
+    // Use suggested category slug from analysis
+    const categorySlug = analysis.suggestedCategorySlug || undefined;
 
     await createProductWithMultiplePhotos(chatId, sku, productName, price, photoUrls, categorySlug);
 
