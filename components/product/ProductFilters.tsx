@@ -122,10 +122,10 @@ export default function ProductFilters({ categories }: ProductFiltersProps) {
       </aside>
 
       {/* Mobile Filter Bar */}
-      <div className="lg:hidden flex items-center justify-between gap-4 mb-6">
+      <div className="lg:hidden flex items-center justify-between gap-3 mb-4">
         <button
           onClick={() => setIsMobileFiltersOpen(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-apple-sm"
+          className="flex items-center gap-2 px-3 py-2 bg-gray-100 rounded-lg text-sm"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -133,7 +133,7 @@ export default function ProductFilters({ categories }: ProductFiltersProps) {
             viewBox="0 0 24 24"
             strokeWidth={1.5}
             stroke="currentColor"
-            className="w-5 h-5"
+            className="w-4 h-4"
           >
             <path
               strokeLinecap="round"
@@ -141,9 +141,9 @@ export default function ProductFilters({ categories }: ProductFiltersProps) {
               d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75"
             />
           </svg>
-          Filtrele
+          Filtre
           {hasActiveFilters && (
-            <span className="w-2 h-2 bg-accent rounded-full" />
+            <span className="w-1.5 h-1.5 bg-accent rounded-full" />
           )}
         </button>
 
@@ -151,7 +151,7 @@ export default function ProductFilters({ categories }: ProductFiltersProps) {
         <select
           value={currentSort}
           onChange={(e) => updateFilters("siralama", e.target.value)}
-          className="px-4 py-2 bg-gray-100 rounded-apple-sm text-sm appearance-none cursor-pointer"
+          className="flex-1 px-3 py-2 bg-gray-100 rounded-lg text-sm appearance-none cursor-pointer truncate"
         >
           {SORT_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>

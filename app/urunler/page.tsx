@@ -131,12 +131,12 @@ async function getProducts(params: {
 
 function LoadingGrid() {
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
       {[...Array(8)].map((_, i) => (
-        <div key={i} className="animate-pulse">
-          <div className="aspect-[3/4] bg-gray-200 rounded-apple mb-4" />
-          <div className="h-4 bg-gray-200 rounded mb-2" />
-          <div className="h-4 bg-gray-200 rounded w-2/3" />
+        <div key={i} className="animate-pulse w-full">
+          <div className="aspect-[3/4] bg-gray-200 rounded-xl sm:rounded-apple mb-3 sm:mb-4" />
+          <div className="h-3 sm:h-4 bg-gray-200 rounded mb-2" />
+          <div className="h-3 sm:h-4 bg-gray-200 rounded w-2/3" />
         </div>
       ))}
     </div>
@@ -156,24 +156,24 @@ export default async function ProductsPage({ searchParams }: PageProps) {
 
   return (
     <div className="section-sm">
-      <div className="container-wide">
+      <div className="container mx-auto px-4 lg:px-6 max-w-[1440px]">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-display text-foreground mb-2">Ürünler</h1>
-          <p className="text-body-large text-gray-500">
+        <div className="mb-6 lg:mb-8">
+          <h1 className="text-2xl lg:text-display text-foreground mb-1 lg:mb-2">Ürünler</h1>
+          <p className="text-sm lg:text-body-large text-gray-500">
             {total > 0 ? `${total} ürün bulundu` : "Ürün bulunamadı"}
           </p>
         </div>
 
-        {/* Content */}
-        <div className="flex gap-12">
+        {/* Content - flex only on desktop */}
+        <div className="lg:flex lg:gap-12">
           {/* Filters */}
           <Suspense fallback={null}>
             <ProductFilters categories={categories} />
           </Suspense>
 
           {/* Products */}
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             {/* Desktop Sort */}
             <div className="hidden lg:flex justify-end mb-6">
               <select

@@ -1,30 +1,49 @@
 "use client";
 
 import { WHATSAPP_PHONE } from "@/lib/constants";
-import { formatPrice } from "@/lib/utils";
+import { formatPrice, slugify } from "@/lib/utils";
 import type { CartItem } from "@/types";
+
+const SITE_URL = "https://ihracfazlasigiyim.com";
 
 interface WhatsAppOrderButtonProps {
   items: CartItem[];
   total: number;
 }
 
+// Ürün URL'si oluştur
+function getProductUrl(item: CartItem): string {
+  const slug = slugify(item.name);
+  return `${SITE_URL}/urunler/${slug}-${item.productId}`;
+}
+
 export default function WhatsAppOrderButton({ items, total }: WhatsAppOrderButtonProps) {
   const generateMessage = () => {
-    let msg = "🛍️ *YENİ SİPARİŞ*\n";
-    msg += "━━━━━━━━━━━━━━━━━\n\n";
+    let msg = "Merhaba, sipariş vermek istiyorum:\n\n";
 
-    items.forEach((item, i) => {
-      msg += `*${i + 1}. ${item.name}*\n`;
-      if (item.size) msg += `   Beden: ${item.size}\n`;
-      if (item.color) msg += `   Renk: ${item.color}\n`;
-      msg += `   Adet: ${item.quantity}\n`;
-      msg += `   Fiyat: ${formatPrice(item.price * item.quantity)}\n\n`;
-    });
+    if (items.length === 1) {
+      // Tek ürün - detaylı format
+      const item = items[0];
+      msg += `🛍️ ${item.name}\n`;
+      if (item.size) msg += `📏 Beden: ${item.size}\n`;
+      if (item.color) msg += `🎨 Renk: ${item.color}\n`;
+      if (item.quantity > 1) msg += `📦 Adet: ${item.quantity}\n`;
+      msg += `💰 Fiyat: ${formatPrice(item.price * item.quantity)}\n`;
+      msg += `🔖 SKU: ${item.sku}\n`;
+      msg += `🔗 ${getProductUrl(item)}`;
+    } else {
+      // Çoklu ürün - liste format
+      items.forEach((item, i) => {
+        const emoji = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"][i] || `${i + 1}.`;
+        msg += `${emoji} ${item.name}`;
+        if (item.size) msg += ` - ${item.size}`;
+        if (item.quantity > 1) msg += ` (${item.quantity} adet)`;
+        msg += ` - ${formatPrice(item.price * item.quantity)}\n`;
+        msg += `🔗 ${getProductUrl(item)}\n\n`;
+      });
 
-    msg += "━━━━━━━━━━━━━━━━━\n";
-    msg += `*TOPLAM: ${formatPrice(total)}*\n\n`;
-    msg += "📍 Adres ve teslimat bilgilerimi paylaşmak istiyorum.";
+      msg += `💰 *Toplam: ${formatPrice(total)}*`;
+    }
 
     return encodeURIComponent(msg);
   };

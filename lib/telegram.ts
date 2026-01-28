@@ -51,6 +51,9 @@ const MAIN_CATEGORIES = [
   }
 ];
 
+// Default sizes for products
+const DEFAULT_SIZES = ["S", "M", "L", "XL", "XXL"];
+
 // Types
 export interface TelegramUser {
   id: number;
@@ -454,11 +457,13 @@ async function handleStart(chatId: number) {
 Merhaba! Mağaza yönetim botuna hoş geldiniz.
 
 <b>🚀 TAM OTOMATİK ÜRÜN EKLEME</b>
-1. Sadece fotoğraf gönderin
+1. Fotoğraf gönderin (tekli veya çoklu)
 2. AI markayı, tipi ve rengi tanır
 3. SKU otomatik oluşturulur
-4. Sadece fiyat yazın: <code>450</code>
-5. Ürün eklendi!
+4. Fiyat yazın: <code>450</code>
+5. Seri stok girin: <code>1 2 3 2 1</code>
+   (S=1, M=2, L=3, XL=2, XXL=1)
+6. Ürün tamamlandı! ✅
 
 <b>📦 ÜRÜN YÖNETİMİ</b>
 /urunekle - Yeni ürün ekle
@@ -470,7 +475,9 @@ Merhaba! Mağaza yönetim botuna hoş geldiniz.
 
 <b>📊 STOK YÖNETİMİ</b>
 /stok [SKU] - Stok sorgula
-/stokekle [SKU] [beden] [adet] - Stok ekle
+/seristok [SKU] [stoklar] - Seri stok gir
+  Örnek: <code>/seristok TH05 1 2 3 2 1</code>
+/stokekle [SKU] [beden] [adet] - Tek stok ekle
 /stokdus [SKU] [beden] [adet] - Stok düş
 /dusukstok - Düşük stokları göster
 
@@ -969,7 +976,7 @@ async function handlePhoto(
       data: { photoUrls: [fileUrl] },
     });
 
-    await sendMessage(chatId, `✅ Fotoğraf alındı!\n\nŞimdi ürün bilgilerini gönderin:\n\n<code>SKU İsim Fiyat</code>\n\nÖrnek:\n<code>YLDZ02 Loro Piano Kazak 1200</code>\n\n<i>Varsayılan bedenler: S, M, L, XL</i>\n<i>/iptal ile vazgeçebilirsiniz</i>`);
+    await sendMessage(chatId, `✅ Fotoğraf alındı!\n\nŞimdi ürün bilgilerini gönderin:\n\n<code>SKU İsim Fiyat</code>\n\nÖrnek:\n<code>YLDZ02 Loro Piano Kazak 1200</code>\n\n<i>Varsayılan bedenler: S, M, L, XL, XXL</i>\n<i>/iptal ile vazgeçebilirsiniz</i>`);
     return;
   }
 
@@ -992,7 +999,7 @@ async function handlePhoto(
     // Try simple format: "SKU İsim Fiyat" or "SKU | İsim | Fiyat"
     const parsed = parseSimpleCaption(caption);
     if (parsed) {
-      await createProductWithPhoto(chatId, parsed.sku, parsed.name, parsed.price, fileUrl);
+      await createProductWithPhoto(chatId, parsed.sku, parsed.name, parsed.price, fileUrl, undefined, undefined, userId);
       return;
     }
   }
@@ -1063,7 +1070,7 @@ async function handlePhoto(
       data: { photoUrls: [fileUrl] },
     });
 
-    await sendMessage(chatId, `📷 Fotoğraf alındı!\n\nÜrün bilgilerini gönderin:\n\n<code>SKU İsim Fiyat</code>\n\nÖrnek:\n<code>YLDZ02 Loro Piano Kazak 1200</code>\n\n<i>Varsayılan bedenler: S, M, L, XL</i>`);
+    await sendMessage(chatId, `📷 Fotoğraf alındı!\n\nÜrün bilgilerini gönderin:\n\n<code>SKU İsim Fiyat</code>\n\nÖrnek:\n<code>YLDZ02 Loro Piano Kazak 1200</code>\n\n<i>Varsayılan bedenler: S, M, L, XL, XXL</i>`);
   }
 }
 
@@ -1075,10 +1082,11 @@ async function createProductWithPhoto(
   price: number,
   photoUrl: string,
   categorySlug?: string,
-  customSizes?: string[]
+  customSizes?: string[],
+  userId?: number
 ) {
-  // Default sizes: S, M, L, XL
-  const sizes = customSizes && customSizes.length > 0 ? customSizes : ["S", "M", "L", "XL"];
+  // Default sizes: S, M, L, XL, XXL
+  const sizes = customSizes && customSizes.length > 0 ? customSizes : DEFAULT_SIZES;
 
   // Create product
   const productData: Record<string, unknown> = {
@@ -1119,11 +1127,25 @@ async function createProductWithPhoto(
     isPrimary: true,
   });
 
+  let message: string;
   if (imageResult.success) {
-    await sendMessage(chatId, `✅ <b>Ürün eklendi!</b>\n\n📦 SKU: ${sku.toUpperCase()}\n📝 İsim: ${name}\n💰 Fiyat: ${formatCurrency(price)}\n📏 Bedenler: ${sizes.join(", ")}\n🖼️ Fotoğraf: Yüklendi\n\n<i>Stok eklemek için:</i>\n/stokekle ${sku.toUpperCase()} M 10`);
+    message = `✅ <b>Ürün eklendi!</b>\n\n📦 SKU: <code>${sku.toUpperCase()}</code>\n📝 İsim: ${name}\n💰 Fiyat: ${formatCurrency(price)}\n📏 Bedenler: ${sizes.join(", ")}\n🖼️ Fotoğraf: Yüklendi`;
   } else {
     console.error(`Cloudinary upload failed for ${sku}:`, imageResult.error);
-    await sendMessage(chatId, `⚠️ Ürün eklendi ama fotoğraf yüklenemedi.\n\nSKU: ${sku.toUpperCase()}\n\n<i>Hata: ${imageResult.error?.message || "Cloudinary hatası"}</i>\n\n<i>Fotoğraf eklemek için:</i>\n/foto ${sku.toUpperCase()}`);
+    message = `⚠️ Ürün eklendi ama fotoğraf yüklenemedi.\n\n📦 SKU: <code>${sku.toUpperCase()}</code>\n📏 Bedenler: ${sizes.join(", ")}\n\n<i>Hata: ${imageResult.error?.message || "Cloudinary hatası"}</i>`;
+  }
+
+  // Ask for stock entry
+  message += `\n\n📦 <b>Stok girin (seri format):</b>\nÖrnek: <code>1 2 3 2 1</code>\n(S=1, M=2, L=3, XL=2, XXL=1)\n\nVeya tek sayı: <code>5</code>\n(Tüm bedenlere 5 adet)\n\n<i>/atla ile stok girişini atlayabilirsiniz</i>`;
+
+  await sendMessage(chatId, message);
+
+  // Set state to wait for stock entry
+  if (userId) {
+    userStates.set(userId, {
+      action: "add_stock_serial",
+      data: { sku: sku.toUpperCase(), sizes },
+    });
   }
 }
 
@@ -1175,21 +1197,84 @@ async function processMediaGroup(mediaGroupId: string) {
     // Try simple format: "SKU İsim Fiyat" or "SKU | İsim | Fiyat"
     const parsed = parseSimpleCaption(caption);
     if (parsed) {
-      await createProductWithMultiplePhotos(chatId, parsed.sku, parsed.name, parsed.price, photoUrls);
+      await createProductWithMultiplePhotos(chatId, parsed.sku, parsed.name, parsed.price, photoUrls, undefined, undefined, userId);
       return;
     }
   }
 
-  // Start product add flow with multiple photos
-  userStates.set(userId, {
-    action: "add_product_info",
-    data: { photoUrls },
-  });
+  // No caption or couldn't parse - try AI analysis on first photo
+  await sendMessage(chatId, `📷 <b>${photoUrls.length} fotoğraf alındı!</b>\n\n🔍 Ürün analiz ediliyor...`);
 
-  await sendMessage(
-    chatId,
-    `📷 <b>${photoUrls.length} fotoğraf alındı!</b>\n\nÜrün bilgilerini gönderin:\n\n<code>SKU İsim Fiyat</code>\n\nÖrnek:\n<code>YLDZ02 Loro Piano Kazak 1200</code>\n\n<i>Varsayılan bedenler: S, M, L, XL</i>\n<i>/iptal ile vazgeçebilirsiniz</i>`
-  );
+  const analysis = await analyzeProductImage(photoUrls[0]);
+
+  if (analysis && analysis.autoSku) {
+    // Store analysis for later use - fully automatic mode
+    userStates.set(userId, {
+      action: "add_product_auto",
+      data: {
+        photoUrls,
+        analysis,
+      },
+    });
+
+    const brandInfo = analysis.brand ? `<b>${analysis.brand}</b>` : "Bilinmeyen Marka";
+    const confidenceEmoji = analysis.confidence === "high" ? "🎯" : analysis.confidence === "medium" ? "🤔" : "❓";
+    const categoryInfo = analysis.suggestedCategory ? `📁 Kategori: ${analysis.suggestedCategory}\n` : "";
+
+    await sendMessage(
+      chatId,
+      `${confidenceEmoji} <b>Ürün Tanındı!</b>\n\n` +
+      `🏷️ ${analysis.suggestedName}\n\n` +
+      `🔖 SKU: <code>${analysis.autoSku}</code> (otomatik)\n` +
+      `${categoryInfo}` +
+      `🏪 Marka: ${brandInfo}\n` +
+      `👔 Tip: ${analysis.productType}\n` +
+      `🎨 Renk: ${analysis.color}\n` +
+      `🖼️ Fotoğraf: ${photoUrls.length} adet\n\n` +
+      `<b>💰 Sadece fiyat girin:</b>\n` +
+      `Örnek: <code>450</code>\n\n` +
+      `<i>Farklı SKU veya isim istiyorsanız:</i>\n` +
+      `<code>[Fiyat] [SKU] [Yeni İsim]</code>\n\n` +
+      `<i>/iptal ile vazgeçebilirsiniz</i>`
+    );
+  } else if (analysis) {
+    // AI worked but couldn't generate SKU - ask for SKU and price
+    userStates.set(userId, {
+      action: "add_product_with_ai",
+      data: {
+        photoUrls,
+        analysis,
+      },
+    });
+
+    const brandInfo = analysis.brand ? `<b>${analysis.brand}</b>` : "Marka belirlenemedi";
+    const confidenceEmoji = analysis.confidence === "high" ? "🎯" : analysis.confidence === "medium" ? "🤔" : "❓";
+    const categoryInfo = analysis.suggestedCategory ? `\n📁 Kategori: ${analysis.suggestedCategory}` : "";
+
+    await sendMessage(
+      chatId,
+      `${confidenceEmoji} <b>Ürün Tanındı!</b>\n\n` +
+      `🏷️ Marka: ${brandInfo}\n` +
+      `👔 Tip: ${analysis.productType}\n` +
+      `🎨 Renk: ${analysis.color}${categoryInfo}\n` +
+      `🖼️ Fotoğraf: ${photoUrls.length} adet\n\n` +
+      `📝 <b>Önerilen İsim:</b>\n${analysis.suggestedName}\n\n` +
+      `<b>SKU ve Fiyat girin:</b>\n<code>[SKU] [Fiyat]</code>\n\n` +
+      `Örnek: <code>TH001 450</code>\n\n` +
+      `<i>/iptal ile vazgeçebilirsiniz</i>`
+    );
+  } else {
+    // No AI or failed - fallback to manual
+    userStates.set(userId, {
+      action: "add_product_info",
+      data: { photoUrls },
+    });
+
+    await sendMessage(
+      chatId,
+      `📷 <b>${photoUrls.length} fotoğraf alındı!</b>\n\nÜrün bilgilerini gönderin:\n\n<code>SKU İsim Fiyat</code>\n\nÖrnek:\n<code>YLDZ02 Loro Piano Kazak 1200</code>\n\n<i>Varsayılan bedenler: S, M, L, XL, XXL</i>\n<i>/iptal ile vazgeçebilirsiniz</i>`
+    );
+  }
 }
 
 // Create product with multiple photos
@@ -1200,9 +1285,10 @@ async function createProductWithMultiplePhotos(
   price: number,
   photoUrls: string[],
   categoryName?: string,
-  customSizes?: string[]
+  customSizes?: string[],
+  userId?: number
 ) {
-  const sizes = customSizes && customSizes.length > 0 ? customSizes : ["S", "M", "L", "XL"];
+  const sizes = customSizes && customSizes.length > 0 ? customSizes : DEFAULT_SIZES;
 
   const productData: Record<string, unknown> = {
     sku: sku.toUpperCase(),
@@ -1253,15 +1339,24 @@ async function createProductWithMultiplePhotos(
     categoryDisplay = `\n📁 Kategori: ${categoryName}`;
   }
 
-  let message = `✅ <b>Ürün eklendi!</b>\n\n📦 SKU: ${sku.toUpperCase()}\n📝 İsim: ${name}\n💰 Fiyat: ${formatCurrency(price)}${categoryDisplay}\n📏 Bedenler: ${sizes.join(", ")}\n🖼️ Fotoğraf: ${uploadedCount}/${photoUrls.length} yüklendi`;
+  let message = `✅ <b>Ürün eklendi!</b>\n\n📦 SKU: <code>${sku.toUpperCase()}</code>\n📝 İsim: ${name}\n💰 Fiyat: ${formatCurrency(price)}${categoryDisplay}\n📏 Bedenler: ${sizes.join(", ")}\n🖼️ Fotoğraf: ${uploadedCount}/${photoUrls.length} yüklendi`;
 
   if (errors.length > 0) {
     message += `\n\n⚠️ Bazı fotoğraflar yüklenemedi:\n${errors.slice(0, 3).join("\n")}`;
   }
 
-  message += `\n\n<i>Stok eklemek için:</i>\n/stokekle ${sku.toUpperCase()} M 10`;
+  // Ask for stock entry
+  message += `\n\n📦 <b>Stok girin (seri format):</b>\nÖrnek: <code>1 2 3 2 1</code>\n(S=1, M=2, L=3, XL=2, XXL=1)\n\nVeya tek sayı: <code>5</code>\n(Tüm bedenlere 5 adet)\n\n<i>/atla ile stok girişini atlayabilirsiniz</i>`;
 
   await sendMessage(chatId, message);
+
+  // Set state to wait for stock entry
+  if (userId) {
+    userStates.set(userId, {
+      action: "add_stock_serial",
+      data: { sku: sku.toUpperCase(), sizes },
+    });
+  }
 }
 
 // Add photos to existing product
@@ -1394,12 +1489,12 @@ async function handleTextInput(chatId: number, userId: number, text: string) {
     const photoUrl = state.data.photoUrl as string | undefined;
 
     if (photoUrls && photoUrls.length > 0) {
-      await createProductWithMultiplePhotos(chatId, sku, name, price, photoUrls);
+      await createProductWithMultiplePhotos(chatId, sku, name, price, photoUrls, undefined, undefined, userId);
     } else if (photoUrl) {
-      await createProductWithPhoto(chatId, sku, name, price, photoUrl);
+      await createProductWithPhoto(chatId, sku, name, price, photoUrl, undefined, undefined, userId);
     }
 
-    userStates.delete(userId);
+    // Don't delete state - create functions set new state for stock entry
     return true;
   }
 
@@ -1442,9 +1537,9 @@ async function handleTextInput(chatId: number, userId: number, text: string) {
     // Use suggested category name (will be auto-created if needed)
     const categoryName = analysis.suggestedCategory || undefined;
 
-    await createProductWithMultiplePhotos(chatId, sku, productName, price, photoUrls, categoryName);
+    await createProductWithMultiplePhotos(chatId, sku, productName, price, photoUrls, categoryName, undefined, userId);
 
-    userStates.delete(userId);
+    // Don't delete state - createProductWithMultiplePhotos sets new state for stock entry
     return true;
   }
 
@@ -1476,9 +1571,89 @@ async function handleTextInput(chatId: number, userId: number, text: string) {
     // Use suggested category name (will be auto-created if needed)
     const categoryName = analysis.suggestedCategory || undefined;
 
-    await createProductWithMultiplePhotos(chatId, sku, productName, price, photoUrls, categoryName);
+    await createProductWithMultiplePhotos(chatId, sku, productName, price, photoUrls, categoryName, undefined, userId);
+
+    // Don't delete state - createProductWithMultiplePhotos sets new state for stock entry
+    return true;
+  }
+
+  // Serial stock entry: "1 2 3 2 1" or single number "5"
+  if (state.action === "add_stock_serial") {
+    // Check for skip command
+    if (text.toLowerCase() === "/atla") {
+      userStates.delete(userId);
+      await sendMessage(chatId, "⏭️ Stok girişi atlandı.\n\n<i>Daha sonra stok eklemek için:</i>\n/seristok veya /stokekle");
+      return true;
+    }
+
+    const { sku, sizes } = state.data as { sku: string; sizes: string[] };
+    const numbers = text.trim().split(/\s+/).map(n => parseInt(n));
+
+    // Validate all are numbers
+    if (numbers.some(n => isNaN(n) || n < 0)) {
+      await sendMessage(chatId, "❌ Geçersiz format. Sadece sayı girin.\n\nÖrnek: <code>1 2 3 2 1</code>\nVeya: <code>5</code>");
+      return true;
+    }
+
+    let stockUpdates: { size: string; quantity: number }[] = [];
+
+    if (numbers.length === 1) {
+      // Single number - apply to all sizes
+      const quantity = numbers[0];
+      stockUpdates = sizes.map(size => ({ size, quantity }));
+    } else if (numbers.length === sizes.length) {
+      // Match sizes with numbers
+      stockUpdates = sizes.map((size, i) => ({ size, quantity: numbers[i] }));
+    } else {
+      await sendMessage(
+        chatId,
+        `❌ ${sizes.length} beden için ${sizes.length} sayı girin.\n\n` +
+        `Bedenler: ${sizes.join(", ")}\n` +
+        `Örnek: <code>${sizes.map((_, i) => i + 1).join(" ")}</code>\n\n` +
+        `Veya tek sayı girerek tüm bedenlere aynı stok ekleyin:\n<code>5</code>`
+      );
+      return true;
+    }
+
+    // Add stocks
+    let successCount = 0;
+    let totalStock = 0;
+    const results: string[] = [];
+
+    for (const { size, quantity } of stockUpdates) {
+      if (quantity > 0) {
+        const result = await apiCall("/stock/update-by-sku", "POST", {
+          sku,
+          size,
+          change: quantity,
+          reason: "restock",
+          note: "Telegram bot ile eklendi (seri giriş)",
+        });
+        if (result.success) {
+          successCount++;
+          totalStock += quantity;
+          results.push(`${size}: +${quantity}`);
+        }
+      } else {
+        results.push(`${size}: 0`);
+      }
+    }
 
     userStates.delete(userId);
+
+    if (successCount > 0) {
+      await sendMessage(
+        chatId,
+        `✅ <b>Stok eklendi!</b>\n\n` +
+        `📦 SKU: ${sku}\n` +
+        `📊 ${results.join(" | ")}\n` +
+        `📈 Toplam: +${totalStock} adet\n\n` +
+        `<i>Stok sorgulamak için:</i> /stok ${sku}`
+      );
+    } else {
+      await sendMessage(chatId, `ℹ️ Stok girişi yapılmadı (tüm değerler 0).`);
+    }
+
     return true;
   }
 
@@ -1640,6 +1815,104 @@ async function handleFinans(chatId: number) {
   await sendMessage(chatId, message);
 }
 
+// /seristok [SKU] [stoklar] - Seri stok girişi
+async function handleSeriStok(chatId: number, args: string[]) {
+  if (args.length < 2) {
+    await sendMessage(
+      chatId,
+      `❌ Kullanım: /seristok [SKU] [stok değerleri]\n\n` +
+      `<b>Seri format:</b>\n` +
+      `<code>/seristok LCST05 1 2 3 2 1</code>\n` +
+      `(S=1, M=2, L=3, XL=2, XXL=1)\n\n` +
+      `<b>Tek sayı:</b>\n` +
+      `<code>/seristok LCST05 5</code>\n` +
+      `(Tüm bedenlere 5 adet)`
+    );
+    return;
+  }
+
+  const sku = args[0].toUpperCase();
+  const stockValues = args.slice(1).map(n => parseInt(n));
+
+  // Validate SKU exists
+  const productResult = await apiCall(`/products/sku/${sku}`);
+  if (!productResult.success || !productResult.data) {
+    await sendMessage(chatId, `❌ Ürün bulunamadı: ${sku}`);
+    return;
+  }
+
+  // Get product sizes from variants
+  const variants = productResult.data.variants || [];
+  const sizes = variants.map((v: { size: string }) => v.size);
+
+  if (sizes.length === 0) {
+    await sendMessage(chatId, `❌ Ürünün varyantı yok: ${sku}`);
+    return;
+  }
+
+  // Validate all are numbers
+  if (stockValues.some(n => isNaN(n) || n < 0)) {
+    await sendMessage(chatId, "❌ Geçersiz stok değeri. Sadece pozitif sayı girin.");
+    return;
+  }
+
+  let stockUpdates: { size: string; quantity: number }[] = [];
+
+  if (stockValues.length === 1) {
+    // Single number - apply to all sizes
+    const quantity = stockValues[0];
+    stockUpdates = sizes.map((size: string) => ({ size, quantity }));
+  } else if (stockValues.length === sizes.length) {
+    // Match sizes with numbers
+    stockUpdates = sizes.map((size: string, i: number) => ({ size, quantity: stockValues[i] }));
+  } else {
+    await sendMessage(
+      chatId,
+      `❌ ${sizes.length} beden için ${sizes.length} sayı girin.\n\n` +
+      `Bedenler: ${sizes.join(", ")}\n` +
+      `Örnek: <code>/seristok ${sku} ${sizes.map((_: string, i: number) => i + 1).join(" ")}</code>`
+    );
+    return;
+  }
+
+  // Add stocks
+  let successCount = 0;
+  let totalStock = 0;
+  const results: string[] = [];
+
+  for (const { size, quantity } of stockUpdates) {
+    if (quantity > 0) {
+      const result = await apiCall("/stock/update-by-sku", "POST", {
+        sku,
+        size,
+        change: quantity,
+        reason: "restock",
+        note: "Telegram bot ile eklendi (seri stok)",
+      });
+      if (result.success) {
+        successCount++;
+        totalStock += quantity;
+        results.push(`${size}: +${quantity}`);
+      }
+    } else {
+      results.push(`${size}: 0`);
+    }
+  }
+
+  if (successCount > 0) {
+    await sendMessage(
+      chatId,
+      `✅ <b>Stok eklendi!</b>\n\n` +
+      `📦 SKU: ${sku}\n` +
+      `📊 ${results.join(" | ")}\n` +
+      `📈 Toplam: +${totalStock} adet\n\n` +
+      `<i>Stok sorgulamak için:</i> /stok ${sku}`
+    );
+  } else {
+    await sendMessage(chatId, `ℹ️ Stok girişi yapılmadı (tüm değerler 0).`);
+  }
+}
+
 // ==========================================
 // MAIN MESSAGE HANDLER
 // ==========================================
@@ -1671,8 +1944,8 @@ export async function handleUpdate(update: TelegramUpdate) {
   const command = parts[0].toLowerCase().replace("@", "").split("@")[0];
   const args = parts.slice(1);
 
-  // Clear state on new command (except /iptal)
-  if (command !== "/iptal") {
+  // Clear state on new command (except /iptal and /atla which handle state themselves)
+  if (command !== "/iptal" && command !== "/atla") {
     userStates.delete(userId);
   }
 
@@ -1751,6 +2024,18 @@ export async function handleUpdate(update: TelegramUpdate) {
         break;
       case "/fotograflar":
         await handleFotograflar(chatId, args);
+        break;
+      case "/seristok":
+        await handleSeriStok(chatId, args);
+        break;
+      case "/atla":
+        // Skip stock entry if in that state
+        if (userStates.get(userId)?.action === "add_stock_serial") {
+          userStates.delete(userId);
+          await sendMessage(chatId, "⏭️ Stok girişi atlandı.");
+        } else {
+          await sendMessage(chatId, "ℹ️ Atlanacak bir işlem yok.");
+        }
         break;
       default:
         await sendMessage(chatId, "❓ Bilinmeyen komut. /yardim yazarak komutları görebilirsiniz.");
