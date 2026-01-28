@@ -2746,6 +2746,14 @@ export async function handleUpdate(update: TelegramUpdate) {
   const userId = message.from?.id || chatId;
   const text = message.text?.trim() || "";
 
+  // Debug logging for media
+  if (message.photo) {
+    console.log('[Webhook] Photo received:', message.photo[message.photo.length - 1]?.file_id);
+  }
+  if (message.video) {
+    console.log('[Webhook] Video received:', message.video.file_id, 'thumbnail:', message.video.thumbnail?.file_id);
+  }
+
   // Handle photo (with media group support)
   if (message.photo) {
     await handlePhoto(chatId, userId, message.photo, message.caption, message.media_group_id);
