@@ -4,6 +4,26 @@ const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://ihracfazlasigiyim.com";
 const SITE_API = process.env.TELEGRAM_SITE_API || `${SITE_URL}/api/v1`;
 const API_KEY = process.env.API_SECRET_KEY || "";
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
+
+// Known brands we sell
+const KNOWN_BRANDS = [
+  "Prada", "Lacoste", "Tommy Hilfiger", "Hugo Boss", "Armani",
+  "Versace", "Calvin Klein", "Ralph Lauren", "Gucci", "Burberry",
+  "Polo Ralph Lauren", "Emporio Armani", "Giorgio Armani", "Boss",
+  "Tommy Jeans", "CK", "Loro Piana", "Zegna", "Canali", "Brioni"
+];
+
+// Product categories
+const PRODUCT_CATEGORIES = [
+  { name: "T-Shirt & Polo", keywords: ["t-shirt", "tişört", "polo", "tshirt"] },
+  { name: "Gömlek", keywords: ["gömlek", "shirt", "camicia"] },
+  { name: "Kazak & Triko", keywords: ["kazak", "triko", "sweater", "knitwear", "örgü"] },
+  { name: "Ceket & Mont", keywords: ["ceket", "mont", "jacket", "coat", "blazer"] },
+  { name: "Pantolon", keywords: ["pantolon", "pants", "trousers", "chino"] },
+  { name: "Şort", keywords: ["şort", "shorts", "bermuda"] },
+  { name: "Sweatshirt", keywords: ["sweatshirt", "hoodie", "kapüşonlu"] },
+];
 
 // Types
 export interface TelegramUser {
@@ -119,6 +139,106 @@ export async function getFileUrl(fileId: string): Promise<string | null> {
     return `https://api.telegram.org/file/bot${BOT_TOKEN}/${data.result.file_path}`;
   }
   return null;
+}
+
+// Product analysis result from AI
+interface ProductAnalysis {
+  brand: string | null;
+  productType: string;
+  color: string;
+  suggestedName: string;
+  suggestedCategory: string | null;
+  confidence: "high" | "medium" | "low";
+}
+
+// Analyze product image with Claude Vision API
+async function analyzeProductImage(imageUrl: string): Promise<ProductAnalysis | null> {
+  if (!ANTHROPIC_API_KEY) {
+    console.log("ANTHROPIC_API_KEY not configured, skipping AI analysis");
+    return null;
+  }
+
+  try {
+    // Download image and convert to base64
+    const imageResponse = await fetch(imageUrl);
+    const imageBuffer = await imageResponse.arrayBuffer();
+    const base64Image = Buffer.from(imageBuffer).toString("base64");
+    const mediaType = imageUrl.includes(".png") ? "image/png" : "image/jpeg";
+
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 500,
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "image",
+                source: {
+                  type: "base64",
+                  media_type: mediaType,
+                  data: base64Image,
+                },
+              },
+              {
+                type: "text",
+                text: `Bu erkek giyim ürününü analiz et. Bilinen markalar: ${KNOWN_BRANDS.join(", ")}.
+
+JSON formatında yanıt ver (başka bir şey yazma):
+{
+  "brand": "marka adı veya null",
+  "productType": "ürün tipi (t-shirt, gömlek, kazak, ceket, pantolon, vb.)",
+  "color": "renk (lacivert, beyaz, siyah, gri, vb.)",
+  "suggestedName": "Profesyonel ürün adı örn: Tommy Hilfiger Erkek Lacivert Polo Yaka T-Shirt",
+  "confidence": "high/medium/low - marka görünürlüğüne göre"
+}
+
+Logo veya marka etiketi görünüyorsa confidence: high
+Stil benzerse ama logo net değilse: medium
+Marka belirsizse: low ve brand: null`,
+              },
+            ],
+          },
+        ],
+      }),
+    });
+
+    if (!response.ok) {
+      console.error("Claude API error:", response.status, await response.text());
+      return null;
+    }
+
+    const result = await response.json();
+    const textContent = result.content?.find((c: { type: string }) => c.type === "text");
+    if (!textContent?.text) return null;
+
+    // Parse JSON from response
+    const jsonMatch = textContent.text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return null;
+
+    const analysis = JSON.parse(jsonMatch[0]) as ProductAnalysis;
+
+    // Find matching category
+    const lowerProductType = analysis.productType.toLowerCase();
+    for (const cat of PRODUCT_CATEGORIES) {
+      if (cat.keywords.some(k => lowerProductType.includes(k))) {
+        analysis.suggestedCategory = cat.name;
+        break;
+      }
+    }
+
+    return analysis;
+  } catch (error) {
+    console.error("Error analyzing product image:", error);
+    return null;
+  }
 }
 
 // API helper
@@ -733,13 +853,46 @@ async function handlePhoto(
     }
   }
 
-  // Start product add flow
-  userStates.set(userId, {
-    action: "add_product_info",
-    data: { photoUrls: [fileUrl] },
-  });
+  // No caption - try AI analysis
+  await sendMessage(chatId, "🔍 Ürün analiz ediliyor...");
 
-  await sendMessage(chatId, `📷 Fotoğraf alındı!\n\nÜrün bilgilerini gönderin:\n\n<code>SKU İsim Fiyat</code>\n\nÖrnek:\n<code>YLDZ02 Loro Piano Kazak 1200</code>\n\n<i>Varsayılan bedenler: S, M, L, XL</i>`);
+  const analysis = await analyzeProductImage(fileUrl);
+
+  if (analysis) {
+    // Store analysis for later use
+    userStates.set(userId, {
+      action: "add_product_with_ai",
+      data: {
+        photoUrls: [fileUrl],
+        analysis,
+      },
+    });
+
+    const brandInfo = analysis.brand ? `<b>${analysis.brand}</b>` : "Marka belirlenemedi";
+    const confidenceEmoji = analysis.confidence === "high" ? "🎯" : analysis.confidence === "medium" ? "🤔" : "❓";
+    const categoryInfo = analysis.suggestedCategory ? `\n📁 Kategori: ${analysis.suggestedCategory}` : "";
+
+    await sendMessage(
+      chatId,
+      `${confidenceEmoji} <b>Ürün Tanındı!</b>\n\n` +
+      `🏷️ Marka: ${brandInfo}\n` +
+      `👔 Tip: ${analysis.productType}\n` +
+      `🎨 Renk: ${analysis.color}${categoryInfo}\n\n` +
+      `📝 <b>Önerilen İsim:</b>\n${analysis.suggestedName}\n\n` +
+      `<b>SKU ve Fiyat girin:</b>\n<code>[SKU] [Fiyat]</code>\n\n` +
+      `Örnek: <code>TH001 450</code>\n\n` +
+      `<i>Farklı isim için:</i>\n<code>[SKU] [Fiyat] [İsim]</code>\n\n` +
+      `<i>/iptal ile vazgeçebilirsiniz</i>`
+    );
+  } else {
+    // No AI or failed - fallback to manual
+    userStates.set(userId, {
+      action: "add_product_info",
+      data: { photoUrls: [fileUrl] },
+    });
+
+    await sendMessage(chatId, `📷 Fotoğraf alındı!\n\nÜrün bilgilerini gönderin:\n\n<code>SKU İsim Fiyat</code>\n\nÖrnek:\n<code>YLDZ02 Loro Piano Kazak 1200</code>\n\n<i>Varsayılan bedenler: S, M, L, XL</i>`);
+  }
 }
 
 // Create product with photo
@@ -1071,6 +1224,52 @@ async function handleTextInput(chatId: number, userId: number, text: string) {
     } else if (photoUrl) {
       await createProductWithPhoto(chatId, sku, name, price, photoUrl);
     }
+
+    userStates.delete(userId);
+    return true;
+  }
+
+  // AI-assisted product creation: "SKU Fiyat" or "SKU Fiyat Farklı İsim"
+  if (state.action === "add_product_with_ai") {
+    const analysis = state.data.analysis as ProductAnalysis;
+    const photoUrls = state.data.photoUrls as string[];
+
+    // Parse input: "SKU Fiyat" or "SKU Fiyat Custom Name Here"
+    const words = text.trim().split(/\s+/);
+
+    if (words.length < 2) {
+      await sendMessage(chatId, "❌ Geçersiz format.\n\n<code>[SKU] [Fiyat]</code>\n\nÖrnek: <code>TH001 450</code>");
+      return true;
+    }
+
+    const sku = words[0].toUpperCase();
+    const price = parseFloat(words[1]);
+
+    if (isNaN(price) || price <= 0) {
+      await sendMessage(chatId, "❌ Geçersiz fiyat. Sayı girin.");
+      return true;
+    }
+
+    // Use custom name if provided, otherwise use AI suggestion
+    const customName = words.length > 2 ? words.slice(2).join(" ") : null;
+    const productName = customName || analysis.suggestedName;
+
+    // Find category slug
+    let categorySlug: string | undefined;
+    if (analysis.suggestedCategory) {
+      const catResult = await apiCall("/categories");
+      if (catResult.success && catResult.data) {
+        const category = catResult.data.find((c: { name: string }) =>
+          c.name.toLowerCase().includes(analysis.suggestedCategory!.toLowerCase()) ||
+          analysis.suggestedCategory!.toLowerCase().includes(c.name.toLowerCase())
+        );
+        if (category) {
+          categorySlug = category.slug;
+        }
+      }
+    }
+
+    await createProductWithMultiplePhotos(chatId, sku, productName, price, photoUrls, categorySlug);
 
     userStates.delete(userId);
     return true;
