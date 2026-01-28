@@ -121,7 +121,16 @@ export default function Footer() {
         <div className="mt-12 pt-8 border-t border-gray-200">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <p className="text-gray-500 text-caption">
-              © {currentYear} {SITE_CONFIG.shortName}. Tüm hakları saklıdır.
+              © {currentYear} {SITE_CONFIG.shortName}. Tüm hakları saklıdır. |{" "}
+              Web Tasarım:{" "}
+              <a
+                href="https://webtasariminegol.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-foreground transition-colors"
+              >
+                YALDUZ Web &amp; SEO
+              </a>
             </p>
             <div className="flex items-center gap-6">
               <Link href="/gizlilik" className="text-gray-500 text-caption hover:text-foreground transition-colors">
