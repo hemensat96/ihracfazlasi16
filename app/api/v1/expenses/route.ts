@@ -6,8 +6,8 @@ const EXPENSE_CATEGORIES = ["kira", "fatura", "maas", "mal_alimi", "diger"];
 
 // GET /api/v1/expenses - Gider listele
 export async function GET(request: NextRequest) {
-  const authError = await validateApiKey(request);
-  if (authError) return authError;
+  const authResult = await validateApiKey(request);
+  if (!authResult.success) return authResult.error;
 
   try {
     const { searchParams } = new URL(request.url);
@@ -63,8 +63,8 @@ export async function GET(request: NextRequest) {
 
 // POST /api/v1/expenses - Gider ekle
 export async function POST(request: NextRequest) {
-  const authError = await validateApiKey(request);
-  if (authError) return authError;
+  const authResult = await validateApiKey(request);
+  if (!authResult.success) return authResult.error;
 
   try {
     const body = await request.json();

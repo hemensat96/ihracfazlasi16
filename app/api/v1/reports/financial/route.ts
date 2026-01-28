@@ -4,8 +4,8 @@ import { validateApiKey } from "@/lib/api-auth";
 
 // GET /api/v1/reports/financial - Finansal rapor
 export async function GET(request: NextRequest) {
-  const authError = await validateApiKey(request);
-  if (authError) return authError;
+  const authResult = await validateApiKey(request);
+  if (!authResult.success) return authResult.error;
 
   try {
     const { searchParams } = new URL(request.url);

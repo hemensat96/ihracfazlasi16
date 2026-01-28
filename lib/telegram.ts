@@ -578,7 +578,7 @@ async function handlePhoto(chatId: number, userId: number, photo: TelegramPhoto[
       data: { photoUrl: fileUrl },
     });
 
-    await sendMessage(chatId, `✅ Fotoğraf alındı!\n\nŞimdi ürün bilgilerini tek mesajda gönderin:\n\n<code>SKU | İsim | Fiyat | Kategori</code>\n\nÖrnek:\n<code>ELB003 | Yazlık Elbise | 450 | elbiseler</code>\n\n<i>/iptal ile vazgeçebilirsiniz</i>`);
+    await sendMessage(chatId, `✅ Fotoğraf alındı!\n\nŞimdi ürün bilgilerini tek mesajda gönderin:\n\n<code>SKU | İsim | Fiyat | Kategori | Bedenler</code>\n\nÖrnek:\n<code>ELB003 | Yazlık Elbise | 450 | elbiseler | S,M,L,XL</code>\n\n<i>Bedenler opsiyonel (varsayılan: S,M,L)</i>\n<i>/iptal ile vazgeçebilirsiniz</i>`);
   } else {
     // Quick product add with caption
     if (caption) {
@@ -586,10 +586,16 @@ async function handlePhoto(chatId: number, userId: number, photo: TelegramPhoto[
       if (parts.length >= 3) {
         const [sku, name, priceStr] = parts;
         const categorySlug = parts[3] || undefined;
+        const sizesStr = parts[4] || undefined;
         const price = parseFloat(priceStr);
 
+        // Parse sizes: "S,M,L,XL" -> ["S", "M", "L", "XL"]
+        const customSizes = sizesStr
+          ? sizesStr.split(",").map(s => s.trim()).filter(s => s.length > 0)
+          : undefined;
+
         if (sku && name && !isNaN(price)) {
-          await createProductWithPhoto(chatId, sku, name, price, fileUrl, categorySlug);
+          await createProductWithPhoto(chatId, sku, name, price, fileUrl, categorySlug, customSizes);
           return;
         }
       }
@@ -601,7 +607,7 @@ async function handlePhoto(chatId: number, userId: number, photo: TelegramPhoto[
       data: { photoUrl: fileUrl },
     });
 
-    await sendMessage(chatId, `📷 Fotoğraf alındı!\n\nÜrün bilgilerini gönderin:\n<code>SKU | İsim | Fiyat | Kategori</code>\n\nÖrnek:\n<code>ELB003 | Yazlık Elbise | 450 | elbiseler</code>`);
+    await sendMessage(chatId, `📷 Fotoğraf alındı!\n\nÜrün bilgilerini gönderin:\n<code>SKU | İsim | Fiyat | Kategori | Bedenler</code>\n\nÖrnek:\n<code>ELB003 | Yazlık Elbise | 450 | elbiseler | S,M,L,XL</code>\n\n<i>Bedenler opsiyonel (varsayılan: S,M,L)</i>`);
   }
 }
 
@@ -612,18 +618,22 @@ async function createProductWithPhoto(
   name: string,
   price: number,
   photoUrl: string,
-  categorySlug?: string
+  categorySlug?: string,
+  customSizes?: string[]
 ) {
+  // Default sizes or custom sizes
+  const sizes = customSizes && customSizes.length > 0 ? customSizes : ["S", "M", "L"];
+
   // Create product
   const productData: Record<string, unknown> = {
     sku: sku.toUpperCase(),
     name,
     price,
-    variants: [
-      { size: "S", color: "Standart", stock: 0 },
-      { size: "M", color: "Standart", stock: 0 },
-      { size: "L", color: "Standart", stock: 0 },
-    ],
+    variants: sizes.map(size => ({
+      size: size.toUpperCase(),
+      color: "Standart",
+      stock: 0,
+    })),
   };
 
   // Get category ID if provided
@@ -675,13 +685,19 @@ async function handleTextInput(chatId: number, userId: number, text: string) {
     const parts = text.split("|").map(p => p.trim());
 
     if (parts.length < 3) {
-      await sendMessage(chatId, "❌ Geçersiz format.\n\nDoğru format:\n<code>SKU | İsim | Fiyat | Kategori</code>");
+      await sendMessage(chatId, "❌ Geçersiz format.\n\nDoğru format:\n<code>SKU | İsim | Fiyat | Kategori | Bedenler</code>");
       return true;
     }
 
     const [sku, name, priceStr] = parts;
     const categorySlug = parts[3] || undefined;
+    const sizesStr = parts[4] || undefined;
     const price = parseFloat(priceStr);
+
+    // Parse sizes: "S,M,L,XL" -> ["S", "M", "L", "XL"]
+    const customSizes = sizesStr
+      ? sizesStr.split(",").map(s => s.trim()).filter(s => s.length > 0)
+      : undefined;
 
     if (!sku || !name || isNaN(price)) {
       await sendMessage(chatId, "❌ Geçersiz bilgi. SKU, isim ve fiyat zorunludur.");
@@ -694,7 +710,8 @@ async function handleTextInput(chatId: number, userId: number, text: string) {
       name,
       price,
       state.data.photoUrl as string,
-      categorySlug
+      categorySlug,
+      customSizes
     );
 
     userStates.delete(userId);
