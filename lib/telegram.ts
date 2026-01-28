@@ -140,6 +140,12 @@ Merhaba! Mağaza yönetim botuna hoş geldiniz.
 /aylik - Aylık rapor
 /ciro - Anlık ciro
 
+<b>💸 GİDER & FİNANS</b>
+/gider [tutar] [kategori] [açıklama] - Gider ekle
+/giderler - Son giderleri listele
+/kar - Kar/zarar raporu
+/finans - Aylık finansal özet
+
 <b>📁 KATEGORİ</b>
 /kategoriler - Kategori listesi
 /kategoriekle [isim] - Yeni kategori
@@ -704,6 +710,156 @@ async function handleYardim(chatId: number) {
 }
 
 // ==========================================
+// GİDER VE FİNANS KOMUTLARI
+// ==========================================
+
+const EXPENSE_CATEGORIES: Record<string, string> = {
+  kira: "Kira",
+  fatura: "Fatura",
+  maas: "Maaş",
+  mal_alimi: "Mal Alımı",
+  diger: "Diğer",
+};
+
+// /gider [tutar] [kategori] [açıklama] - Gider ekle
+async function handleGider(chatId: number, args: string[]) {
+  if (args.length < 2) {
+    const categories = Object.entries(EXPENSE_CATEGORIES)
+      .map(([k, v]) => `• ${k} - ${v}`)
+      .join("\n");
+    await sendMessage(
+      chatId,
+      `❌ Kullanım: /gider [tutar] [kategori] [açıklama]\n\nÖrnek: /gider 5000 kira Ocak kirası\n\n<b>Kategoriler:</b>\n${categories}`
+    );
+    return;
+  }
+
+  const amount = parseFloat(args[0]);
+  const category = args[1].toLowerCase();
+  const description = args.slice(2).join(" ") || undefined;
+
+  if (isNaN(amount) || amount <= 0) {
+    await sendMessage(chatId, "❌ Geçersiz tutar.");
+    return;
+  }
+
+  if (!EXPENSE_CATEGORIES[category]) {
+    await sendMessage(
+      chatId,
+      `❌ Geçersiz kategori. Geçerli kategoriler: ${Object.keys(EXPENSE_CATEGORIES).join(", ")}`
+    );
+    return;
+  }
+
+  const result = await apiCall("/expenses", "POST", {
+    amount,
+    category,
+    description,
+  });
+
+  if (result.success) {
+    await sendMessage(
+      chatId,
+      `✅ <b>Gider eklendi!</b>\n\n💸 Tutar: ${formatCurrency(amount)}\n📁 Kategori: ${EXPENSE_CATEGORIES[category]}\n${description ? `📝 Açıklama: ${description}` : ""}`
+    );
+  } else {
+    await sendMessage(chatId, `❌ Hata: ${result.error?.message || "Gider eklenemedi"}`);
+  }
+}
+
+// /giderler - Son giderleri listele
+async function handleGiderler(chatId: number) {
+  const result = await apiCall("/expenses?limit=15");
+
+  if (!result.success || !result.data?.length) {
+    await sendMessage(chatId, "📭 Henüz gider kaydı yok.");
+    return;
+  }
+
+  let message = "💸 <b>SON GİDERLER</b>\n\n";
+  for (const expense of result.data) {
+    const date = formatDate(expense.expenseDate);
+    const category = EXPENSE_CATEGORIES[expense.category] || expense.category;
+    message += `• ${formatCurrency(expense.amount)} - ${category}\n`;
+    message += `  📅 ${date}${expense.description ? ` | ${expense.description}` : ""}\n\n`;
+  }
+
+  if (result.summary) {
+    message += `\n<b>Toplam:</b> ${formatCurrency(result.summary.total)}`;
+  }
+
+  await sendMessage(chatId, message);
+}
+
+// /kar - Kar/zarar raporu
+async function handleKar(chatId: number) {
+  const result = await apiCall("/reports/financial?period=month");
+
+  if (!result.success || !result.data) {
+    await sendMessage(chatId, "❌ Kar raporu alınamadı.");
+    return;
+  }
+
+  const r = result.data;
+  const profitEmoji = r.profit.net >= 0 ? "📈" : "📉";
+  const statusEmoji = r.profit.net >= 0 ? "✅" : "⚠️";
+
+  let message = `${profitEmoji} <b>KAR/ZARAR RAPORU</b>\n${r.period}\n\n`;
+  message += `<b>GELİR</b>\n`;
+  message += `💰 Satış Geliri: ${formatCurrency(r.revenue.total)}\n`;
+  message += `📦 Satış Adedi: ${r.revenue.salesCount}\n\n`;
+
+  message += `<b>GİDER</b>\n`;
+  message += `🏭 Ürün Maliyeti: ${formatCurrency(r.costs.productCost)}\n`;
+  message += `💸 Diğer Giderler: ${formatCurrency(r.costs.expenses)}\n`;
+  message += `📊 Toplam Gider: ${formatCurrency(r.costs.total)}\n\n`;
+
+  message += `<b>KAR</b>\n`;
+  message += `📊 Brüt Kar: ${formatCurrency(r.profit.gross)} (%${r.profit.grossMargin})\n`;
+  message += `${statusEmoji} <b>Net Kar: ${formatCurrency(r.profit.net)}</b> (%${r.profit.netMargin})\n\n`;
+
+  message += `Durum: <b>${r.profit.net >= 0 ? "KARDA" : "ZARARDA"}</b>`;
+
+  await sendMessage(chatId, message);
+}
+
+// /finans - Aylık finansal özet
+async function handleFinans(chatId: number) {
+  const result = await apiCall("/reports/financial?period=month");
+
+  if (!result.success || !result.data) {
+    await sendMessage(chatId, "❌ Finansal rapor alınamadı.");
+    return;
+  }
+
+  const r = result.data;
+  let message = `📊 <b>AYLIK FİNANSAL ÖZET</b>\n${r.period}\n\n`;
+
+  message += `<b>💰 GELİR</b>\n`;
+  message += `Toplam Satış: ${formatCurrency(r.revenue.total)}\n`;
+  message += `Satış Sayısı: ${r.revenue.salesCount}\n`;
+  message += `Ortalama Sipariş: ${formatCurrency(r.revenue.averageOrder)}\n\n`;
+
+  message += `<b>💸 GİDERLER</b>\n`;
+  if (Object.keys(r.expenseBreakdown).length > 0) {
+    for (const [cat, amount] of Object.entries(r.expenseBreakdown)) {
+      const catName = EXPENSE_CATEGORIES[cat] || cat;
+      message += `• ${catName}: ${formatCurrency(amount as number)}\n`;
+    }
+    message += `<b>Toplam:</b> ${formatCurrency(r.costs.expenses)}\n\n`;
+  } else {
+    message += `Kayıtlı gider yok\n\n`;
+  }
+
+  message += `<b>📈 ÖZET</b>\n`;
+  message += `Brüt Kar: ${formatCurrency(r.profit.gross)}\n`;
+  message += `Net Kar: <b>${formatCurrency(r.profit.net)}</b>\n`;
+  message += `Kar Marjı: %${r.profit.netMargin}`;
+
+  await sendMessage(chatId, message);
+}
+
+// ==========================================
 // MAIN MESSAGE HANDLER
 // ==========================================
 
@@ -796,6 +952,18 @@ export async function handleUpdate(update: TelegramUpdate) {
         break;
       case "/kategoriekle":
         await handleKategoriEkle(chatId, args);
+        break;
+      case "/gider":
+        await handleGider(chatId, args);
+        break;
+      case "/giderler":
+        await handleGiderler(chatId);
+        break;
+      case "/kar":
+        await handleKar(chatId);
+        break;
+      case "/finans":
+        await handleFinans(chatId);
         break;
       default:
         await sendMessage(chatId, "❓ Bilinmeyen komut. /yardim yazarak komutları görebilirsiniz.");

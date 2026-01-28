@@ -108,3 +108,12 @@ model ApiKey {
   createdAt   DateTime  @default(now())
   lastUsedAt  DateTime?
 }
+
+model Expense {
+  id          Int      @id @default(autoincrement())
+  amount      Float
+  category    String   // kira, fatura, maas, mal_alimi, diger
+  description String?
+  expenseDate DateTime @default(now())
+  createdAt   DateTime @default(now())
+}
