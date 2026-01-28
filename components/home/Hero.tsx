@@ -5,21 +5,24 @@ import { motion } from "framer-motion";
 
 export default function Hero() {
   return (
-    <section className="relative h-screen md:h-screen overflow-hidden">
-      {/* Video Background */}
+    <section className="relative h-screen overflow-hidden">
+      {/* Mobil için statik arka plan */}
+      <div className="absolute inset-0 bg-gradient-to-b from-gray-900 via-gray-800 to-gray-700 md:hidden" />
+
+      {/* Desktop için video */}
       <video
         autoPlay
         muted
         loop
         playsInline
         preload="metadata"
-        className="absolute inset-0 w-full h-full object-cover"
+        className="absolute inset-0 w-full h-full object-cover hidden md:block"
       >
         <source src="/hero-video.webm" type="video/webm" />
       </video>
 
       {/* Dark Overlay */}
-      <div className="absolute inset-0 bg-black/50" />
+      <div className="absolute inset-0 bg-black/40 md:bg-black/50" />
 
       {/* Content */}
       <div className="relative z-10 h-full flex flex-col items-center justify-center text-center px-4">
