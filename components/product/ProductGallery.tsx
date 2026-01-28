@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -9,9 +9,21 @@ interface ProductGalleryProps {
   productName: string;
 }
 
+// Check if URL is a video
+function isVideoUrl(url: string): boolean {
+  const videoExtensions = ['.mp4', '.mov', '.webm', '.avi', '.mkv'];
+  const lowerUrl = url.toLowerCase();
+  // Check file extension or Cloudinary video path
+  return videoExtensions.some(ext => lowerUrl.includes(ext)) || lowerUrl.includes('/video/upload/');
+}
+
 export default function ProductGallery({ images, productName }: ProductGalleryProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [isZoomed, setIsZoomed] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  const currentMedia = images[selectedIndex];
+  const isCurrentVideo = currentMedia ? isVideoUrl(currentMedia.imageUrl) : false;
 
   if (images.length === 0) {
     return (
@@ -37,10 +49,10 @@ export default function ProductGallery({ images, productName }: ProductGalleryPr
   return (
     <>
       <div className="space-y-4">
-        {/* Main Image */}
+        {/* Main Image/Video */}
         <div
-          className="relative aspect-square bg-gray-100 rounded-apple overflow-hidden cursor-zoom-in"
-          onClick={() => setIsZoomed(true)}
+          className={`relative aspect-square bg-gray-100 rounded-apple overflow-hidden ${!isCurrentVideo ? 'cursor-zoom-in' : ''}`}
+          onClick={() => !isCurrentVideo && setIsZoomed(true)}
         >
           <AnimatePresence mode="wait">
             <motion.div
@@ -50,14 +62,27 @@ export default function ProductGallery({ images, productName }: ProductGalleryPr
               exit={{ opacity: 0 }}
               className="absolute inset-0"
             >
-              <Image
-                src={images[selectedIndex].imageUrl}
-                alt={`${productName} - Görsel ${selectedIndex + 1}`}
-                fill
-                sizes="(max-width: 768px) 100vw, 50vw"
-                className="object-cover"
-                priority
-              />
+              {isCurrentVideo ? (
+                <video
+                  ref={videoRef}
+                  src={currentMedia.imageUrl}
+                  className="w-full h-full object-cover"
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                  controls
+                />
+              ) : (
+                <Image
+                  src={currentMedia.imageUrl}
+                  alt={`${productName} - Görsel ${selectedIndex + 1}`}
+                  fill
+                  sizes="(max-width: 768px) 100vw, 50vw"
+                  className="object-cover"
+                  priority
+                />
+              )}
             </motion.div>
           </AnimatePresence>
 
@@ -107,25 +132,50 @@ export default function ProductGallery({ images, productName }: ProductGalleryPr
         {/* Thumbnails */}
         {images.length > 1 && (
           <div className="flex gap-3 overflow-x-auto pb-2">
-            {images.map((image, index) => (
-              <button
-                key={image.id}
-                onClick={() => setSelectedIndex(index)}
-                className={`relative flex-shrink-0 w-20 h-20 rounded-apple-sm overflow-hidden transition-all ${
-                  selectedIndex === index
-                    ? "ring-2 ring-accent"
-                    : "opacity-60 hover:opacity-100"
-                }`}
-              >
-                <Image
-                  src={image.imageUrl}
-                  alt={`${productName} - Küçük Görsel ${index + 1}`}
-                  fill
-                  sizes="80px"
-                  className="object-cover"
-                />
-              </button>
-            ))}
+            {images.map((image, index) => {
+              const isVideo = isVideoUrl(image.imageUrl);
+              return (
+                <button
+                  key={image.id}
+                  onClick={() => setSelectedIndex(index)}
+                  className={`relative flex-shrink-0 w-20 h-20 rounded-apple-sm overflow-hidden transition-all ${
+                    selectedIndex === index
+                      ? "ring-2 ring-accent"
+                      : "opacity-60 hover:opacity-100"
+                  }`}
+                >
+                  {isVideo ? (
+                    <>
+                      <video
+                        src={image.imageUrl}
+                        className="w-full h-full object-cover"
+                        muted
+                        playsInline
+                      />
+                      {/* Video icon overlay */}
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="white"
+                          viewBox="0 0 24 24"
+                          className="w-6 h-6 drop-shadow"
+                        >
+                          <path d="M8 5v14l11-7z" />
+                        </svg>
+                      </div>
+                    </>
+                  ) : (
+                    <Image
+                      src={image.imageUrl}
+                      alt={`${productName} - Küçük Görsel ${index + 1}`}
+                      fill
+                      sizes="80px"
+                      className="object-cover"
+                    />
+                  )}
+                </button>
+              );
+            })}
           </div>
         )}
       </div>
@@ -157,15 +207,27 @@ export default function ProductGallery({ images, productName }: ProductGalleryPr
               </svg>
             </button>
 
-            {/* Image */}
-            <div className="relative w-full h-full max-w-5xl max-h-[90vh] m-4">
-              <Image
-                src={images[selectedIndex].imageUrl}
-                alt={`${productName} - Tam Ekran`}
-                fill
-                sizes="100vw"
-                className="object-contain"
-              />
+            {/* Image/Video */}
+            <div className="relative w-full h-full max-w-5xl max-h-[90vh] m-4" onClick={(e) => e.stopPropagation()}>
+              {isCurrentVideo ? (
+                <video
+                  src={currentMedia.imageUrl}
+                  className="w-full h-full object-contain"
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                  controls
+                />
+              ) : (
+                <Image
+                  src={currentMedia.imageUrl}
+                  alt={`${productName} - Tam Ekran`}
+                  fill
+                  sizes="100vw"
+                  className="object-contain"
+                />
+              )}
             </div>
 
             {/* Navigation */}
