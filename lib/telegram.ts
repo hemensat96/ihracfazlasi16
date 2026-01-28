@@ -35,6 +35,7 @@ export interface TelegramMessage {
   text?: string;
   photo?: TelegramPhoto[];
   caption?: string;
+  media_group_id?: string;
 }
 
 export interface TelegramUpdate {
@@ -44,6 +45,26 @@ export interface TelegramUpdate {
 
 // User state for multi-step operations
 const userStates: Map<number, { action: string; data: Record<string, unknown> }> = new Map();
+
+// Media group tracking for multiple photos
+interface MediaGroupData {
+  chatId: number;
+  userId: number;
+  photos: string[]; // file_ids
+  caption?: string;
+  timestamp: number;
+  timeoutId?: NodeJS.Timeout;
+}
+const mediaGroups: Map<string, MediaGroupData> = new Map();
+const MEDIA_GROUP_TIMEOUT = 2000; // 2 seconds to collect all photos in a group
+
+// Pending photo additions for /foto command
+interface PendingPhotoAdd {
+  sku: string;
+  productId: number;
+  photos: string[]; // file URLs
+}
+const pendingPhotoAdds: Map<string, PendingPhotoAdd> = new Map();
 
 // Send message with retry mechanism
 export async function sendMessage(
@@ -131,6 +152,8 @@ Merhaba! Mağaza yönetim botuna hoş geldiniz.
 /urunler - Ürün listesi
 /urunsil [SKU] - Ürün sil
 /fiyat [SKU] [fiyat] - Fiyat güncelle
+/foto [SKU] - Ürüne fotoğraf ekle
+/fotograflar [SKU] - Ürün fotoğraflarını listele
 
 <b>📊 STOK YÖNETİMİ</b>
 /stok [SKU] - Stok sorgula
@@ -159,7 +182,8 @@ Merhaba! Mağaza yönetim botuna hoş geldiniz.
 /kategoriler - Kategori listesi
 /kategoriekle [isim] - Yeni kategori
 
-💡 <i>Fotoğraf göndererek hızlıca ürün ekleyebilirsiniz!</i>
+💡 <i>Fotoğraf(lar) göndererek hızlıca ürün ekleyebilirsiniz!</i>
+📷 <i>Birden fazla fotoğraf seçip tek seferde gönderebilirsiniz.</i>
 `;
   await sendMessage(chatId, message);
 }
@@ -567,12 +591,48 @@ async function handleUrunEkle(chatId: number, userId: number) {
   await sendMessage(chatId, "📷 <b>ÜRÜN EKLEME</b>\n\nÜrün fotoğrafını gönderin...\n\n<i>/iptal ile vazgeçebilirsiniz</i>");
 }
 
-// Handle photo upload for product
-async function handlePhoto(chatId: number, userId: number, photo: TelegramPhoto[], caption?: string) {
+// Handle photo upload for product (with media group support)
+async function handlePhoto(
+  chatId: number,
+  userId: number,
+  photo: TelegramPhoto[],
+  caption?: string,
+  mediaGroupId?: string
+) {
   const state = userStates.get(userId);
-
-  // Get the largest photo
   const largestPhoto = photo[photo.length - 1];
+
+  // If this is part of a media group, collect photos
+  if (mediaGroupId) {
+    const existingGroup = mediaGroups.get(mediaGroupId);
+
+    if (existingGroup) {
+      // Add photo to existing group
+      existingGroup.photos.push(largestPhoto.file_id);
+      if (caption && !existingGroup.caption) {
+        existingGroup.caption = caption;
+      }
+      existingGroup.timestamp = Date.now();
+    } else {
+      // Create new media group
+      const groupData: MediaGroupData = {
+        chatId,
+        userId,
+        photos: [largestPhoto.file_id],
+        caption,
+        timestamp: Date.now(),
+      };
+      mediaGroups.set(mediaGroupId, groupData);
+
+      // Set timeout to process after all photos arrive
+      groupData.timeoutId = setTimeout(() => {
+        processMediaGroup(mediaGroupId);
+      }, MEDIA_GROUP_TIMEOUT);
+    }
+    return;
+  }
+
+  // Single photo handling
   const fileUrl = await getFileUrl(largestPhoto.file_id);
 
   if (!fileUrl) {
@@ -580,44 +640,66 @@ async function handlePhoto(chatId: number, userId: number, photo: TelegramPhoto[
     return;
   }
 
+  // State: Adding photo to existing product
+  if (state?.action === "add_photo_to_product") {
+    const { sku, productId } = state.data as { sku: string; productId: number };
+    userStates.delete(userId);
+    await addPhotosToProduct(chatId, productId, sku, [fileUrl]);
+    return;
+  }
+
+  // State: Adding product with photo
   if (state?.action === "add_product_photo") {
-    // Store photo URL and ask for product info
     userStates.set(userId, {
       action: "add_product_info",
-      data: { photoUrl: fileUrl },
+      data: { photoUrls: [fileUrl] },
     });
 
     await sendMessage(chatId, `✅ Fotoğraf alındı!\n\nŞimdi ürün bilgilerini tek mesajda gönderin:\n\n<code>SKU | İsim | Fiyat | Kategori | Bedenler</code>\n\nÖrnek:\n<code>ELB003 | Yazlık Elbise | 450 | elbiseler | S,M,L,XL</code>\n\n<i>Bedenler opsiyonel (varsayılan: S,M,L)</i>\n<i>/iptal ile vazgeçebilirsiniz</i>`);
-  } else {
-    // Quick product add with caption
-    if (caption) {
-      const parts = caption.split("|").map(p => p.trim());
-      if (parts.length >= 3) {
-        const [sku, name, priceStr] = parts;
-        const categorySlug = parts[3] || undefined;
-        const sizesStr = parts[4] || undefined;
-        const price = parseFloat(priceStr);
+    return;
+  }
 
-        // Parse sizes: "S,M,L,XL" -> ["S", "M", "L", "XL"]
-        const customSizes = sizesStr
-          ? sizesStr.split(",").map(s => s.trim()).filter(s => s.length > 0)
-          : undefined;
+  // Quick product add with caption
+  if (caption) {
+    const parts = caption.split("|").map(p => p.trim());
+    if (parts.length >= 3) {
+      const [sku, name, priceStr] = parts;
+      const categorySlug = parts[3] || undefined;
+      const sizesStr = parts[4] || undefined;
+      const price = parseFloat(priceStr);
 
-        if (sku && name && !isNaN(price)) {
-          await createProductWithPhoto(chatId, sku, name, price, fileUrl, categorySlug, customSizes);
-          return;
-        }
+      const customSizes = sizesStr
+        ? sizesStr.split(",").map(s => s.trim()).filter(s => s.length > 0)
+        : undefined;
+
+      if (sku && name && !isNaN(price)) {
+        await createProductWithPhoto(chatId, sku, name, price, fileUrl, categorySlug, customSizes);
+        return;
       }
     }
 
-    // Start product add flow
-    userStates.set(userId, {
-      action: "add_product_info",
-      data: { photoUrl: fileUrl },
-    });
-
-    await sendMessage(chatId, `📷 Fotoğraf alındı!\n\nÜrün bilgilerini gönderin:\n<code>SKU | İsim | Fiyat | Kategori | Bedenler</code>\n\nÖrnek:\n<code>ELB003 | Yazlık Elbise | 450 | elbiseler | S,M,L,XL</code>\n\n<i>Bedenler opsiyonel (varsayılan: S,M,L)</i>`);
+    // Check for "foto SKU" pattern
+    const fotoMatch = caption.match(/^foto\s+([A-Za-z0-9]+)$/i);
+    if (fotoMatch) {
+      const sku = fotoMatch[1].toUpperCase();
+      const productResult = await apiCall(`/products/sku/${sku}`);
+      if (productResult.success && productResult.data) {
+        await addPhotosToProduct(chatId, productResult.data.id, sku, [fileUrl]);
+        return;
+      } else {
+        await sendMessage(chatId, `❌ Ürün bulunamadı: ${sku}`);
+        return;
+      }
+    }
   }
+
+  // Start product add flow
+  userStates.set(userId, {
+    action: "add_product_info",
+    data: { photoUrls: [fileUrl] },
+  });
+
+  await sendMessage(chatId, `📷 Fotoğraf alındı!\n\nÜrün bilgilerini gönderin:\n<code>SKU | İsim | Fiyat | Kategori | Bedenler</code>\n\nÖrnek:\n<code>ELB003 | Yazlık Elbise | 450 | elbiseler | S,M,L,XL</code>\n\n<i>Bedenler opsiyonel (varsayılan: S,M,L)</i>`);
 }
 
 // Create product with photo
@@ -678,6 +760,229 @@ async function createProductWithPhoto(
   }
 }
 
+// Process media group after timeout - upload all photos
+async function processMediaGroup(mediaGroupId: string) {
+  const groupData = mediaGroups.get(mediaGroupId);
+  if (!groupData) return;
+
+  mediaGroups.delete(mediaGroupId);
+
+  const { chatId, userId, photos, caption } = groupData;
+
+  // Get file URLs for all photos
+  const photoUrls: string[] = [];
+  for (const fileId of photos) {
+    const url = await getFileUrl(fileId);
+    if (url) photoUrls.push(url);
+  }
+
+  if (photoUrls.length === 0) {
+    await sendMessage(chatId, "❌ Fotoğraflar alınamadı. Tekrar deneyin.");
+    return;
+  }
+
+  // Check if this is a /foto command pending
+  const pendingAdd = pendingPhotoAdds.get(`${chatId}_${userId}`);
+  if (pendingAdd) {
+    pendingPhotoAdds.delete(`${chatId}_${userId}`);
+    await addPhotosToProduct(chatId, pendingAdd.productId, pendingAdd.sku, photoUrls);
+    return;
+  }
+
+  // Check if caption has quick product format: "SKU | İsim | Fiyat..."
+  if (caption) {
+    const parts = caption.split("|").map(p => p.trim());
+    if (parts.length >= 3) {
+      const [sku, name, priceStr] = parts;
+      const categorySlug = parts[3] || undefined;
+      const sizesStr = parts[4] || undefined;
+      const price = parseFloat(priceStr);
+
+      const customSizes = sizesStr
+        ? sizesStr.split(",").map(s => s.trim()).filter(s => s.length > 0)
+        : undefined;
+
+      if (sku && name && !isNaN(price)) {
+        await createProductWithMultiplePhotos(chatId, sku, name, price, photoUrls, categorySlug, customSizes);
+        return;
+      }
+    }
+
+    // Check for "foto SKU" pattern in caption
+    const fotoMatch = caption.match(/^foto\s+([A-Za-z0-9]+)$/i);
+    if (fotoMatch) {
+      const sku = fotoMatch[1].toUpperCase();
+      const productResult = await apiCall(`/products/sku/${sku}`);
+      if (productResult.success && productResult.data) {
+        await addPhotosToProduct(chatId, productResult.data.id, sku, photoUrls);
+        return;
+      } else {
+        await sendMessage(chatId, `❌ Ürün bulunamadı: ${sku}`);
+        return;
+      }
+    }
+  }
+
+  // Start product add flow with multiple photos
+  userStates.set(userId, {
+    action: "add_product_info",
+    data: { photoUrls },
+  });
+
+  await sendMessage(
+    chatId,
+    `📷 <b>${photoUrls.length} fotoğraf alındı!</b>\n\nÜrün bilgilerini gönderin:\n<code>SKU | İsim | Fiyat | Kategori | Bedenler</code>\n\nÖrnek:\n<code>ELB003 | Yazlık Elbise | 450 | elbiseler | S,M,L,XL</code>\n\n<i>Bedenler opsiyonel (varsayılan: S,M,L)</i>\n<i>/iptal ile vazgeçebilirsiniz</i>`
+  );
+}
+
+// Create product with multiple photos
+async function createProductWithMultiplePhotos(
+  chatId: number,
+  sku: string,
+  name: string,
+  price: number,
+  photoUrls: string[],
+  categorySlug?: string,
+  customSizes?: string[]
+) {
+  const sizes = customSizes && customSizes.length > 0 ? customSizes : ["S", "M", "L"];
+
+  const productData: Record<string, unknown> = {
+    sku: sku.toUpperCase(),
+    name,
+    price,
+    variants: sizes.map(size => ({
+      size: size.toUpperCase(),
+      color: "Standart",
+      stock: 0,
+    })),
+  };
+
+  if (categorySlug) {
+    const catResult = await apiCall("/categories");
+    if (catResult.success && catResult.data) {
+      const category = catResult.data.find((c: { slug: string }) =>
+        c.slug.toLowerCase() === categorySlug.toLowerCase()
+      );
+      if (category) {
+        productData.categoryId = category.id;
+      }
+    }
+  }
+
+  const result = await apiCall("/products", "POST", productData);
+
+  if (!result.success) {
+    await sendMessage(chatId, `❌ Ürün eklenemedi: ${result.error?.message || "Bilinmeyen hata"}`);
+    return;
+  }
+
+  // Upload all images - first one is primary
+  let uploadedCount = 0;
+  for (let i = 0; i < photoUrls.length; i++) {
+    const imageResult = await apiCall(`/products/${result.data.id}/images/url`, "POST", {
+      imageUrl: photoUrls[i],
+      isPrimary: i === 0,
+    });
+    if (imageResult.success) uploadedCount++;
+  }
+
+  await sendMessage(
+    chatId,
+    `✅ <b>Ürün eklendi!</b>\n\n📦 SKU: ${sku.toUpperCase()}\n📝 İsim: ${name}\n💰 Fiyat: ${formatCurrency(price)}\n🖼️ Fotoğraf: ${uploadedCount}/${photoUrls.length} yüklendi\n\n<i>Stok eklemek için:</i>\n/stokekle ${sku.toUpperCase()} M 10`
+  );
+}
+
+// Add photos to existing product
+async function addPhotosToProduct(
+  chatId: number,
+  productId: number,
+  sku: string,
+  photoUrls: string[]
+) {
+  let uploadedCount = 0;
+  for (const url of photoUrls) {
+    const imageResult = await apiCall(`/products/${productId}/images/url`, "POST", {
+      imageUrl: url,
+      isPrimary: false, // Additional photos are not primary
+    });
+    if (imageResult.success) uploadedCount++;
+  }
+
+  if (uploadedCount > 0) {
+    await sendMessage(
+      chatId,
+      `✅ <b>Fotoğraflar eklendi!</b>\n\n📦 SKU: ${sku}\n🖼️ ${uploadedCount}/${photoUrls.length} fotoğraf yüklendi\n\n<i>Tüm fotoğrafları görmek için:</i>\n/fotograflar ${sku}`
+    );
+  } else {
+    await sendMessage(chatId, `❌ Fotoğraflar yüklenemedi.`);
+  }
+}
+
+// /foto [SKU] - Add photo(s) to existing product
+async function handleFoto(chatId: number, userId: number, args: string[]) {
+  if (!args.length) {
+    await sendMessage(chatId, "❌ Kullanım: /foto [SKU]\nÖrnek: /foto ELB001\n\nKomutu yazdıktan sonra fotoğraf(lar) gönderin.");
+    return;
+  }
+
+  const sku = args[0].toUpperCase();
+  const productResult = await apiCall(`/products/sku/${sku}`);
+
+  if (!productResult.success || !productResult.data) {
+    await sendMessage(chatId, `❌ Ürün bulunamadı: ${sku}`);
+    return;
+  }
+
+  // Set state to wait for photos
+  userStates.set(userId, {
+    action: "add_photo_to_product",
+    data: { sku, productId: productResult.data.id },
+  });
+
+  await sendMessage(
+    chatId,
+    `📷 <b>${sku}</b> ürününe fotoğraf ekle\n\nŞimdi fotoğraf(lar) gönderin.\n<i>Birden fazla fotoğraf seçip tek seferde gönderebilirsiniz.</i>\n\n<i>/iptal ile vazgeçebilirsiniz</i>`
+  );
+}
+
+// /fotograflar [SKU] - List product photos
+async function handleFotograflar(chatId: number, args: string[]) {
+  if (!args.length) {
+    await sendMessage(chatId, "❌ Kullanım: /fotograflar [SKU]\nÖrnek: /fotograflar ELB001");
+    return;
+  }
+
+  const sku = args[0].toUpperCase();
+  const productResult = await apiCall(`/products/sku/${sku}`);
+
+  if (!productResult.success || !productResult.data) {
+    await sendMessage(chatId, `❌ Ürün bulunamadı: ${sku}`);
+    return;
+  }
+
+  const product = productResult.data;
+  const images = product.images || [];
+
+  if (images.length === 0) {
+    await sendMessage(chatId, `📷 <b>${sku}</b> - ${product.name}\n\nHenüz fotoğraf yok.\n\n<i>Fotoğraf eklemek için:</i>\n/foto ${sku}`);
+    return;
+  }
+
+  let message = `📷 <b>${sku}</b> - ${product.name}\n\n`;
+  message += `<b>Fotoğraflar:</b> ${images.length} adet\n\n`;
+
+  for (let i = 0; i < images.length; i++) {
+    const img = images[i];
+    const isPrimary = img.isPrimary ? " ⭐" : "";
+    message += `${i + 1}. ${isPrimary}${img.url || "Yüklendi"}\n`;
+  }
+
+  message += `\n<i>Yeni fotoğraf eklemek için:</i>\n/foto ${sku}`;
+
+  await sendMessage(chatId, message);
+}
+
 // Handle text input for multi-step operations
 async function handleTextInput(chatId: number, userId: number, text: string) {
   const state = userStates.get(userId);
@@ -703,7 +1008,6 @@ async function handleTextInput(chatId: number, userId: number, text: string) {
     const sizesStr = parts[4] || undefined;
     const price = parseFloat(priceStr);
 
-    // Parse sizes: "S,M,L,XL" -> ["S", "M", "L", "XL"]
     const customSizes = sizesStr
       ? sizesStr.split(",").map(s => s.trim()).filter(s => s.length > 0)
       : undefined;
@@ -713,15 +1017,31 @@ async function handleTextInput(chatId: number, userId: number, text: string) {
       return true;
     }
 
-    await createProductWithPhoto(
-      chatId,
-      sku,
-      name,
-      price,
-      state.data.photoUrl as string,
-      categorySlug,
-      customSizes
-    );
+    // Support both single photo (legacy) and multiple photos
+    const photoUrls = state.data.photoUrls as string[] | undefined;
+    const photoUrl = state.data.photoUrl as string | undefined;
+
+    if (photoUrls && photoUrls.length > 0) {
+      await createProductWithMultiplePhotos(
+        chatId,
+        sku,
+        name,
+        price,
+        photoUrls,
+        categorySlug,
+        customSizes
+      );
+    } else if (photoUrl) {
+      await createProductWithPhoto(
+        chatId,
+        sku,
+        name,
+        price,
+        photoUrl,
+        categorySlug,
+        customSizes
+      );
+    }
 
     userStates.delete(userId);
     return true;
@@ -897,9 +1217,9 @@ export async function handleUpdate(update: TelegramUpdate) {
   const userId = message.from?.id || chatId;
   const text = message.text?.trim() || "";
 
-  // Handle photo
+  // Handle photo (with media group support)
   if (message.photo) {
-    await handlePhoto(chatId, userId, message.photo, message.caption);
+    await handlePhoto(chatId, userId, message.photo, message.caption, message.media_group_id);
     return;
   }
 
@@ -990,6 +1310,12 @@ export async function handleUpdate(update: TelegramUpdate) {
         break;
       case "/finans":
         await handleFinans(chatId);
+        break;
+      case "/foto":
+        await handleFoto(chatId, userId, args);
+        break;
+      case "/fotograflar":
+        await handleFotograflar(chatId, args);
         break;
       default:
         await sendMessage(chatId, "❓ Bilinmeyen komut. /yardim yazarak komutları görebilirsiniz.");
