@@ -196,6 +196,27 @@ interface ProductAnalysis {
   confidence: "high" | "medium" | "low";
 }
 
+// Ledger entry for cash book analysis
+interface LedgerEntry {
+  description: string;
+  amount: number;
+  paymentType?: "KK" | "AH" | "NH"; // Kredi Kartı, Açık Hesap/Nakit, Nakit
+}
+
+// Ledger analysis result
+interface LedgerAnalysis {
+  date: string;
+  incomes: LedgerEntry[];
+  expenses: LedgerEntry[];
+  summary: {
+    creditCard: number;
+    cash: number;
+    totalIncome: number;
+    totalExpense: number;
+    net: number;
+  };
+}
+
 // Get SKU prefix for brand
 function getBrandSkuPrefix(brand: string | null): string {
   if (!brand) return "URN";
@@ -337,6 +358,151 @@ Marka belirsizse: low ve brand: null`,
     return analysis;
   } catch (error) {
     console.error("Error analyzing product image:", error);
+    return null;
+  }
+}
+
+// Analyze ledger/cash book image with Claude Vision API
+async function analyzeLedgerImage(imageUrl: string): Promise<LedgerAnalysis | null> {
+  if (!ANTHROPIC_API_KEY) {
+    console.log("ANTHROPIC_API_KEY not configured, skipping ledger analysis");
+    return null;
+  }
+
+  try {
+    // Download image and convert to base64
+    const imageResponse = await fetch(imageUrl);
+    const imageBuffer = await imageResponse.arrayBuffer();
+    const base64Image = Buffer.from(imageBuffer).toString("base64");
+    const mediaType = imageUrl.includes(".png") ? "image/png" : "image/jpeg";
+
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 2000,
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "image",
+                source: {
+                  type: "base64",
+                  media_type: mediaType,
+                  data: base64Image,
+                },
+              },
+              {
+                type: "text",
+                text: `Bu Türkçe el yazısı kasa defteri fotoğrafını analiz et.
+
+Sütunlar genellikle:
+- İZAHAT / AÇIKLAMA: Ne satıldığı veya gider açıklaması
+- ÇIKAN / LİRA veya GELİR: Gelir tutarı
+- LİRA / GİDER: Gider tutarı
+
+Ödeme türü kısaltmaları:
+- KK = Kredi Kartı
+- AH = Açık Hesap (Nakit)
+- NH = Nakit
+
+Tarihi sayfanın üstünden oku (örn: 22.01.2026 veya 22 Ocak).
+
+JSON formatında yanıt ver (başka bir şey yazma):
+{
+  "date": "22.01.2026",
+  "incomes": [
+    {"description": "1 mont, 1 kazak", "amount": 7800, "paymentType": "KK"},
+    {"description": "1 kazak, 1 pantolon", "amount": 3500, "paymentType": "AH"}
+  ],
+  "expenses": [
+    {"description": "Kargo", "amount": 600},
+    {"description": "Kargo", "amount": 180}
+  ]
+}
+
+Kurallar:
+- Tutarları sayı olarak yaz (nokta veya virgül kullanma)
+- paymentType sadece gelirlerde olsun
+- Ödeme türü belirtilmemişse "AH" kabul et
+- Tüm satırları oku, atla etme
+- El yazısını dikkatli oku`,
+              },
+            ],
+          },
+        ],
+      }),
+    });
+
+    if (!response.ok) {
+      console.error("Anthropic API error:", response.status, await response.text());
+      return null;
+    }
+
+    const data = await response.json();
+    const content = data.content?.[0]?.text;
+
+    if (!content) {
+      console.error("No content in Anthropic response");
+      return null;
+    }
+
+    // Parse JSON from response
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      console.error("No JSON found in response:", content);
+      return null;
+    }
+
+    const parsed = JSON.parse(jsonMatch[0]) as {
+      date: string;
+      incomes: LedgerEntry[];
+      expenses: LedgerEntry[];
+    };
+
+    // Calculate summary
+    let creditCard = 0;
+    let cash = 0;
+    let totalIncome = 0;
+    let totalExpense = 0;
+
+    for (const income of parsed.incomes) {
+      totalIncome += income.amount;
+      if (income.paymentType === "KK") {
+        creditCard += income.amount;
+      } else {
+        cash += income.amount;
+      }
+    }
+
+    for (const expense of parsed.expenses) {
+      totalExpense += expense.amount;
+    }
+
+    const analysis: LedgerAnalysis = {
+      date: parsed.date,
+      incomes: parsed.incomes,
+      expenses: parsed.expenses,
+      summary: {
+        creditCard,
+        cash,
+        totalIncome,
+        totalExpense,
+        net: totalIncome - totalExpense,
+      },
+    };
+
+    console.log(`[Ledger Analysis] Date: ${analysis.date}, Incomes: ${parsed.incomes.length}, Expenses: ${parsed.expenses.length}`);
+
+    return analysis;
+  } catch (error) {
+    console.error("Error analyzing ledger image:", error);
     return null;
   }
 }
@@ -511,6 +677,10 @@ Merhaba! Mağaza yönetim botuna hoş geldiniz.
 /giderler - Son giderleri listele
 /kar - Kar/zarar raporu
 /finans - Aylık finansal özet
+
+<b>📒 KASA DEFTERİ</b>
+Fotoğraf + caption: <code>/defter</code> veya <code>/kasa</code>
+AI el yazısı defteri okur → /onayla ile kaydet
 
 <b>📁 KATEGORİ</b>
 /kategoriler - Kategori listesi
@@ -1003,6 +1173,12 @@ async function handlePhoto(
 
   // Quick product add with caption
   if (caption) {
+    // Check for /defter or /kasa command
+    if (caption.toLowerCase().startsWith("/defter") || caption.toLowerCase().startsWith("/kasa")) {
+      await handleDefter(chatId, userId, fileUrl);
+      return;
+    }
+
     // Check for "foto SKU" pattern first
     const fotoMatch = caption.match(/^foto\s+([A-Za-z0-9]+)$/i);
     if (fotoMatch) {
@@ -1850,6 +2026,7 @@ const EXPENSE_CATEGORIES: Record<string, string> = {
   fatura: "Fatura",
   maas: "Maaş",
   mal_alimi: "Mal Alımı",
+  kargo: "Kargo",
   diger: "Diğer",
 };
 
@@ -1991,6 +2168,148 @@ async function handleFinans(chatId: number) {
   await sendMessage(chatId, message);
 }
 
+// /defter or /kasa - Analyze ledger photo
+async function handleDefter(chatId: number, userId: number, imageUrl: string) {
+  await sendMessage(chatId, "📒 Kasa defteri analiz ediliyor...");
+
+  const analysis = await analyzeLedgerImage(imageUrl);
+
+  if (!analysis) {
+    await sendMessage(chatId, "❌ Defter analiz edilemedi. Lütfen daha net bir fotoğraf gönderin.");
+    return;
+  }
+
+  // Store analysis in user state for confirmation
+  userStates.set(userId, {
+    action: "ledger_confirm",
+    data: { analysis, imageUrl },
+  });
+
+  // Format the output message
+  let message = `📒 <b>KASA DEFTERİ - ${analysis.date}</b>\n\n`;
+
+  // Incomes
+  if (analysis.incomes.length > 0) {
+    message += `💰 <b>GELİRLER:</b>\n`;
+    for (const income of analysis.incomes) {
+      const paymentLabel = income.paymentType === "KK" ? " (KK)" : income.paymentType === "NH" ? " (NH)" : " (AH)";
+      message += `• ${income.description} - ${formatCurrency(income.amount)}${paymentLabel}\n`;
+    }
+    message += `\n`;
+  }
+
+  // Expenses
+  if (analysis.expenses.length > 0) {
+    message += `📤 <b>GİDERLER:</b>\n`;
+    for (const expense of analysis.expenses) {
+      message += `• ${expense.description} - ${formatCurrency(expense.amount)}\n`;
+    }
+    message += `\n`;
+  }
+
+  // Summary
+  message += `📊 <b>ÖZET:</b>\n`;
+  if (analysis.summary.creditCard > 0) {
+    message += `• Kredi Kartı: ${formatCurrency(analysis.summary.creditCard)}\n`;
+  }
+  if (analysis.summary.cash > 0) {
+    message += `• Nakit/AH: ${formatCurrency(analysis.summary.cash)}\n`;
+  }
+  message += `• Toplam Gelir: ${formatCurrency(analysis.summary.totalIncome)}\n`;
+  if (analysis.summary.totalExpense > 0) {
+    message += `• Toplam Gider: ${formatCurrency(analysis.summary.totalExpense)}\n`;
+  }
+  message += `• <b>Net: ${formatCurrency(analysis.summary.net)}</b>\n\n`;
+
+  message += `✅ Kaydetmek için: /onayla\n`;
+  message += `❌ İptal: /iptal`;
+
+  await sendMessage(chatId, message);
+}
+
+// /onayla - Confirm and save ledger entries
+async function handleOnayla(chatId: number, userId: number) {
+  const state = userStates.get(userId);
+
+  if (!state || state.action !== "ledger_confirm") {
+    await sendMessage(chatId, "❌ Onaylanacak bir defter kaydı yok.");
+    return;
+  }
+
+  const analysis = state.data.analysis as LedgerAnalysis;
+  userStates.delete(userId);
+
+  await sendMessage(chatId, "💾 Kayıtlar ekleniyor...");
+
+  let savedIncomes = 0;
+  let savedExpenses = 0;
+  const errors: string[] = [];
+
+  // Save incomes as sales
+  for (const income of analysis.incomes) {
+    const paymentMethod = income.paymentType === "KK" ? "credit_card" : "cash";
+    const result = await apiCall("/sales", "POST", {
+      payment_method: paymentMethod,
+      items: [{
+        sku: "DEFTER",
+        size: "-",
+        quantity: 1,
+        unit_price: income.amount,
+      }],
+      notes: `Defter: ${income.description} (${income.paymentType || "AH"})`,
+    });
+
+    if (result.success) {
+      savedIncomes++;
+    } else {
+      errors.push(`Gelir kaydedilemedi: ${income.description}`);
+    }
+  }
+
+  // Save expenses
+  for (const expense of analysis.expenses) {
+    // Determine category based on description
+    let category = "diger";
+    const desc = expense.description.toLowerCase();
+    if (desc.includes("kargo")) {
+      category = "kargo";
+    } else if (desc.includes("kira")) {
+      category = "kira";
+    } else if (desc.includes("fatura") || desc.includes("elektrik") || desc.includes("su") || desc.includes("doğalgaz")) {
+      category = "fatura";
+    } else if (desc.includes("maaş") || desc.includes("maas")) {
+      category = "maas";
+    }
+
+    const result = await apiCall("/expenses", "POST", {
+      amount: expense.amount,
+      category,
+      description: `Defter: ${expense.description}`,
+    });
+
+    if (result.success) {
+      savedExpenses++;
+    } else {
+      errors.push(`Gider kaydedilemedi: ${expense.description}`);
+    }
+  }
+
+  // Send summary
+  let message = `✅ <b>Defter kaydedildi!</b>\n\n`;
+  message += `📅 Tarih: ${analysis.date}\n`;
+  message += `💰 Gelir kaydı: ${savedIncomes}/${analysis.incomes.length}\n`;
+  message += `💸 Gider kaydı: ${savedExpenses}/${analysis.expenses.length}\n\n`;
+  message += `💵 Toplam Gelir: ${formatCurrency(analysis.summary.totalIncome)}\n`;
+  message += `💸 Toplam Gider: ${formatCurrency(analysis.summary.totalExpense)}\n`;
+  message += `📈 Net: <b>${formatCurrency(analysis.summary.net)}</b>`;
+
+  if (errors.length > 0) {
+    message += `\n\n⚠️ Hatalar:\n${errors.join("\n")}`;
+  }
+
+  await sendMessage(chatId, message);
+}
+
 // /seristok [SKU] [stoklar] - Seri stok girişi
 async function handleSeriStok(chatId: number, args: string[]) {
   if (args.length < 2) {
@@ -2126,8 +2445,8 @@ export async function handleUpdate(update: TelegramUpdate) {
   const command = parts[0].toLowerCase().replace("@", "").split("@")[0];
   const args = parts.slice(1);
 
-  // Clear state on new command (except /iptal and /atla which handle state themselves)
-  if (command !== "/iptal" && command !== "/atla") {
+  // Clear state on new command (except /iptal, /atla, /onayla which handle state themselves)
+  if (command !== "/iptal" && command !== "/atla" && command !== "/onayla") {
     userStates.delete(userId);
   }
 
@@ -2200,6 +2519,13 @@ export async function handleUpdate(update: TelegramUpdate) {
         break;
       case "/finans":
         await handleFinans(chatId);
+        break;
+      case "/defter":
+      case "/kasa":
+        await sendMessage(chatId, "📒 Kasa defteri fotoğrafını /defter veya /kasa caption'ı ile gönderin.\n\nÖrnek: Fotoğraf seç → caption'a <code>/defter</code> yaz → gönder");
+        break;
+      case "/onayla":
+        await handleOnayla(chatId, userId);
         break;
       case "/foto":
         await handleFoto(chatId, userId, args);
