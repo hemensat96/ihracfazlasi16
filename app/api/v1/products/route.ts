@@ -4,17 +4,45 @@ import { validateApiKey, successResponse, errorResponse, paginatedResponse } fro
 import { slugify } from "@/lib/utils";
 import { z } from "zod";
 
+// Brand SKU prefix mapping
+const BRAND_SKU_MAP: Record<string, string> = {
+  "Prada": "PRD",
+  "Lacoste": "LCST",
+  "Tommy Hilfiger": "TH",
+  "Hugo Boss": "HB",
+  "Armani": "ARM",
+  "Versace": "VRS",
+  "Calvin Klein": "CK",
+  "Ralph Lauren": "RL",
+  "Gucci": "GC",
+  "Burberry": "BRB",
+};
+
 // GET /api/v1/products - Ürün listesi
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
 
-    const search = searchParams.get("search") || "";
+    const search = searchParams.get("search") || searchParams.get("q") || "";
     const categoryId = searchParams.get("category_id");
+    const categorySlug = searchParams.get("kategori");
     const isActive = searchParams.get("is_active");
-    const page = parseInt(searchParams.get("page") || "1");
+    const page = parseInt(searchParams.get("page") || searchParams.get("sayfa") || "1");
     const limit = Math.min(parseInt(searchParams.get("limit") || "50"), 100);
     const skip = (page - 1) * limit;
+
+    // Price filters
+    const minPrice = searchParams.get("minFiyat");
+    const maxPrice = searchParams.get("maxFiyat");
+
+    // Brand filter (comma-separated)
+    const brands = searchParams.get("marka")?.split(",").filter(Boolean) || [];
+
+    // Size filter (comma-separated)
+    const sizes = searchParams.get("beden")?.split(",").filter(Boolean) || [];
+
+    // Sort
+    const sort = searchParams.get("siralama") || "newest";
 
     // Build where clause
     const where: Record<string, unknown> = {};
@@ -22,7 +50,7 @@ export async function GET(request: NextRequest) {
     if (search) {
       where.OR = [
         { name: { contains: search } },
-        { sku: { contains: search } },
+        { sku: { contains: search.toUpperCase() } },
         { description: { contains: search } },
       ];
     }
@@ -31,23 +59,95 @@ export async function GET(request: NextRequest) {
       where.categoryId = parseInt(categoryId);
     }
 
+    // Category by slug
+    if (categorySlug) {
+      const category = await prisma.category.findUnique({
+        where: { slug: categorySlug },
+      });
+      if (category) {
+        where.categoryId = category.id;
+      }
+    }
+
     if (isActive !== null && isActive !== undefined) {
       where.isActive = isActive === "true";
+    } else {
+      where.isActive = true; // Default to active only
+    }
+
+    // Price range filter
+    if (minPrice || maxPrice) {
+      where.price = {};
+      if (minPrice) {
+        (where.price as Record<string, number>).gte = parseFloat(minPrice);
+      }
+      if (maxPrice) {
+        (where.price as Record<string, number>).lte = parseFloat(maxPrice);
+      }
+    }
+
+    // Brand filter (by SKU prefix)
+    if (brands.length > 0) {
+      const skuPrefixes = brands
+        .map((brand) => BRAND_SKU_MAP[brand])
+        .filter(Boolean);
+      if (skuPrefixes.length > 0) {
+        where.OR = skuPrefixes.map((prefix) => ({
+          sku: { startsWith: prefix },
+        }));
+      }
+    }
+
+    // Size filter - products that have variants with these sizes in stock
+    let sizeFilter = {};
+    if (sizes.length > 0) {
+      sizeFilter = {
+        variants: {
+          some: {
+            size: { in: sizes },
+            stock: { gt: 0 },
+          },
+        },
+      };
+    }
+
+    // Combine where clauses
+    const finalWhere = sizes.length > 0 ? { ...where, ...sizeFilter } : where;
+
+    // Sort order
+    let orderBy: Record<string, string> = { createdAt: "desc" };
+    switch (sort) {
+      case "price-asc":
+      case "fiyat-artan":
+        orderBy = { price: "asc" };
+        break;
+      case "price-desc":
+      case "fiyat-azalan":
+        orderBy = { price: "desc" };
+        break;
+      case "name-asc":
+        orderBy = { name: "asc" };
+        break;
+      case "name-desc":
+        orderBy = { name: "desc" };
+        break;
+      default:
+        orderBy = { createdAt: "desc" };
     }
 
     const [products, totalItems] = await Promise.all([
       prisma.product.findMany({
-        where,
+        where: finalWhere,
         include: {
           category: true,
           variants: true,
           images: { orderBy: { sortOrder: "asc" } },
         },
-        orderBy: { createdAt: "desc" },
+        orderBy,
         skip,
         take: limit,
       }),
-      prisma.product.count({ where }),
+      prisma.product.count({ where: finalWhere }),
     ]);
 
     const formattedProducts = products.map((p) => ({

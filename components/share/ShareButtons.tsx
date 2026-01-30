@@ -155,7 +155,7 @@ export default function ShareButtons({ product, productUrl }: ShareButtonsProps)
       // Brand logo/text
       ctx.fillStyle = "#666666";
       ctx.font = "28px -apple-system, BlinkMacSystemFont, sans-serif";
-      ctx.fillText("ihracfazlasi.com", canvas.width / 2, 1750);
+      ctx.fillText("ihracfazlasigiyim.com", canvas.width / 2, 1750);
 
       // "Yukarı Kaydır" swipe up indicator
       ctx.fillStyle = "#ffffff";

@@ -85,6 +85,22 @@ export default function Footer() {
                   Sepetim
                 </Link>
               </li>
+              <li>
+                <Link
+                  href="/favoriler"
+                  className="text-gray-500 hover:text-foreground transition-colors"
+                >
+                  Favorilerim
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/sss"
+                  className="text-gray-500 hover:text-foreground transition-colors"
+                >
+                  S.S.S
+                </Link>
+              </li>
             </ul>
           </div>
 

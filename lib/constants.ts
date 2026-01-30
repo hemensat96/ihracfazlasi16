@@ -63,8 +63,58 @@ export const DEFAULT_CATEGORIES = [
   { name: "Aksesuar", slug: "aksesuar" },
 ];
 
-// Bedenler
-export const SIZES = ["S", "M", "L", "XL", "XXL", "3XL", "4XL", "5XL"];
+// Bedenler - Kategori bazlı
+export const SIZES = ["S", "M", "L", "XL", "XXL", "3XL", "4XL", "5XL"]; // Eski format (geriye uyumluluk)
+
+export const SIZES_BY_CATEGORY = {
+  "ust-giyim": ["S", "M", "L", "XL", "XXL", "3XL", "4XL", "5XL"],
+  "alt-giyim": ["28", "30", "32", "34", "36", "38", "40", "42"],
+  "aksesuar": ["STD"],
+};
+
+export const SIZE_TYPE = {
+  UST_GIYIM: "ust-giyim",
+  ALT_GIYIM: "alt-giyim",
+  AKSESUAR: "aksesuar",
+} as const;
+
+// Ürün tipi → Beden tipi eşleşmesi
+export const PRODUCT_TYPE_TO_SIZE_TYPE: Record<string, keyof typeof SIZES_BY_CATEGORY> = {
+  // Üst giyim
+  "t-shirt": "ust-giyim",
+  "tişört": "ust-giyim",
+  "polo": "ust-giyim",
+  "gömlek": "ust-giyim",
+  "kazak": "ust-giyim",
+  "triko": "ust-giyim",
+  "sweatshirt": "ust-giyim",
+  "hoodie": "ust-giyim",
+  "ceket": "ust-giyim",
+  "mont": "ust-giyim",
+  "blazer": "ust-giyim",
+  "yelek": "ust-giyim",
+  "hırka": "ust-giyim",
+  // Alt giyim
+  "pantolon": "alt-giyim",
+  "jean": "alt-giyim",
+  "jeans": "alt-giyim",
+  "kot": "alt-giyim",
+  "şort": "alt-giyim",
+  "bermuda": "alt-giyim",
+  "eşofman altı": "alt-giyim",
+  "jogger": "alt-giyim",
+  "chino": "alt-giyim",
+  // Aksesuar
+  "kemer": "aksesuar",
+  "çanta": "aksesuar",
+  "cüzdan": "aksesuar",
+  "şapka": "aksesuar",
+  "atkı": "aksesuar",
+  "eldiven": "aksesuar",
+  "kravat": "aksesuar",
+  "saat": "aksesuar",
+  "gözlük": "aksesuar",
+};
 
 // Renkler (Türkçe)
 export const COLORS = [

@@ -51,8 +51,55 @@ const MAIN_CATEGORIES = [
   }
 ];
 
-// Default sizes for products
-const DEFAULT_SIZES = ["S", "M", "L", "XL", "XXL", "3XL", "4XL", "5XL"];
+// Default sizes for products by category
+const SIZES_BY_CATEGORY: Record<string, string[]> = {
+  "ust-giyim": ["S", "M", "L", "XL", "XXL", "3XL", "4XL", "5XL"],
+  "alt-giyim": ["28", "30", "32", "34", "36", "38", "40", "42"],
+  "aksesuar": ["STD"],
+};
+const DEFAULT_SIZES = SIZES_BY_CATEGORY["ust-giyim"];
+
+// Product type to size category mapping
+const PRODUCT_TYPE_TO_SIZE_CATEGORY: Record<string, string> = {
+  // Üst giyim
+  "t-shirt": "ust-giyim", "tişört": "ust-giyim", "polo": "ust-giyim",
+  "gömlek": "ust-giyim", "kazak": "ust-giyim", "triko": "ust-giyim",
+  "sweatshirt": "ust-giyim", "hoodie": "ust-giyim", "ceket": "ust-giyim",
+  "mont": "ust-giyim", "blazer": "ust-giyim", "yelek": "ust-giyim", "hırka": "ust-giyim",
+  // Alt giyim
+  "pantolon": "alt-giyim", "jean": "alt-giyim", "jeans": "alt-giyim", "kot": "alt-giyim",
+  "şort": "alt-giyim", "bermuda": "alt-giyim", "eşofman altı": "alt-giyim",
+  "jogger": "alt-giyim", "chino": "alt-giyim",
+  // Aksesuar
+  "kemer": "aksesuar", "çanta": "aksesuar", "cüzdan": "aksesuar", "şapka": "aksesuar",
+  "atkı": "aksesuar", "eldiven": "aksesuar", "kravat": "aksesuar", "saat": "aksesuar", "gözlük": "aksesuar",
+};
+
+// Get sizes by product type or category
+function getSizesByType(productType?: string, categorySlug?: string): string[] {
+  // First try product type
+  if (productType) {
+    const lowerType = productType.toLowerCase();
+    for (const [key, cat] of Object.entries(PRODUCT_TYPE_TO_SIZE_CATEGORY)) {
+      if (lowerType.includes(key)) {
+        return SIZES_BY_CATEGORY[cat] || DEFAULT_SIZES;
+      }
+    }
+  }
+  // Then try category
+  if (categorySlug && SIZES_BY_CATEGORY[categorySlug]) {
+    return SIZES_BY_CATEGORY[categorySlug];
+  }
+  return DEFAULT_SIZES;
+}
+
+// Generate stock entry example string based on sizes
+function getStockEntryExample(sizes: string[]): string {
+  const exampleNums = sizes.slice(0, 5).map((_, i) => i + 1);
+  const sizeExamples = sizes.slice(0, 5).map((size, i) => `${size}=${i + 1}`).join(", ");
+  const moreText = sizes.length > 5 ? "..." : "";
+  return `Örnek: <code>${exampleNums.join(" ")}${sizes.length > 5 ? " ..." : ""}</code>\n(${sizeExamples}${moreText})`;
+}
 
 // Types
 export interface TelegramUser {
@@ -195,6 +242,7 @@ interface ProductAnalysis {
   autoSku: string | null;
   confidence: "high" | "medium" | "low";
   isPackaging?: boolean; // true if image shows packaging (bag, box) instead of actual product
+  sizeType?: "ust-giyim" | "alt-giyim" | "aksesuar"; // AI-determined size category
 }
 
 // Ledger entry for cash book analysis
@@ -393,20 +441,27 @@ async function analyzeProductImage(imageUrl: string, prefetchedData?: { base64: 
 - Sadece etiket/logo
 görüyorsan, bunu belirt.
 
+BEDEN TİPİ BELİRLEME:
+- Üst giyim (t-shirt, gömlek, kazak, ceket, mont, polo, triko, sweatshirt, hoodie, yelek, hırka, blazer): sizeType = "ust-giyim" (S, M, L, XL, XXL, 3XL, 4XL, 5XL)
+- Alt giyim (pantolon, jean, kot, şort, bermuda, chino, jogger, eşofman altı): sizeType = "alt-giyim" (28, 30, 32, 34, 36, 38, 40, 42)
+- Aksesuar (kemer, çanta, cüzdan, şapka, atkı, eldiven, kravat, saat, gözlük): sizeType = "aksesuar" (STD)
+
 JSON formatında yanıt ver (başka bir şey yazma):
 {
   "brand": "marka adı veya null",
-  "productType": "ürün tipi (t-shirt, gömlek, kazak, ceket, pantolon, poşet, kutu, aksesuar vb.)",
+  "productType": "ürün tipi (t-shirt, gömlek, kazak, ceket, pantolon, jean, şort, kemer vb.)",
   "color": "renk (lacivert, beyaz, siyah, gri, vb.)",
   "suggestedName": "Profesyonel ürün adı",
   "isPackaging": true/false - poşet, kutu veya ambalaj mı?,
+  "sizeType": "ust-giyim/alt-giyim/aksesuar",
   "confidence": "high/medium/low"
 }
 
 Örnekler:
-- Giysi görünüyorsa: "Tommy Hilfiger Erkek Lacivert Polo Yaka T-Shirt"
-- Poşet görünüyorsa: "Loro Piana Marka Poşeti" ve isPackaging: true
-- Aksesuar görünüyorsa: "Lacoste Erkek Deri Kemer" ve productType: "kemer"
+- T-shirt: sizeType: "ust-giyim"
+- Pantolon/Jean: sizeType: "alt-giyim"
+- Kemer: sizeType: "aksesuar"
+- Poşet: sizeType: "aksesuar", isPackaging: true
 
 Logo veya marka etiketi net görünüyorsa confidence: high
 Stil benzerse ama logo net değilse: medium
@@ -437,6 +492,7 @@ Marka belirsizse: low ve brand: null`,
     if (analysis.isPackaging) {
       analysis.suggestedCategory = "Aksesuar";
       analysis.suggestedCategorySlug = "aksesuar";
+      analysis.sizeType = "aksesuar";
     } else {
       // Find matching main category (Üst Giyim, Alt Giyim, Aksesuar)
       const lowerProductType = analysis.productType.toLowerCase();
@@ -451,6 +507,20 @@ Marka belirsizse: low ve brand: null`,
       if (!analysis.suggestedCategory) {
         analysis.suggestedCategory = "Üst Giyim";
         analysis.suggestedCategorySlug = "ust-giyim";
+      }
+
+      // Determine sizeType from productType if AI didn't provide it
+      if (!analysis.sizeType) {
+        for (const [key, cat] of Object.entries(PRODUCT_TYPE_TO_SIZE_CATEGORY)) {
+          if (lowerProductType.includes(key)) {
+            analysis.sizeType = cat as "ust-giyim" | "alt-giyim" | "aksesuar";
+            break;
+          }
+        }
+        // Default to category slug if still not set
+        if (!analysis.sizeType && analysis.suggestedCategorySlug) {
+          analysis.sizeType = analysis.suggestedCategorySlug as "ust-giyim" | "alt-giyim" | "aksesuar";
+        }
       }
     }
 
@@ -754,8 +824,11 @@ Merhaba! Mağaza yönetim botuna hoş geldiniz.
 2. AI markayı, tipi ve rengi tanır
 3. SKU otomatik oluşturulur
 4. Fiyat yazın: <code>450</code>
-5. Seri stok girin: <code>1 2 3 3 2 1 1 1</code>
-   (S=1, M=2, L=3, XL=3, XXL=2, 3XL=1, 4XL=1, 5XL=1)
+5. Seri stok girin: <code>1 2 3 3 2 1 1 1</code> veya tek sayı <code>5</code>
+   Bedenler ürün tipine göre otomatik belirlenir:
+   • Üst giyim: S, M, L, XL, XXL, 3XL, 4XL, 5XL
+   • Alt giyim: 28, 30, 32, 34, 36, 38, 40, 42
+   • Aksesuar: STD
 6. Ürün tamamlandı! ✅
 
 <b>📦 ÜRÜN YÖNETİMİ</b>
@@ -790,6 +863,17 @@ Merhaba! Mağaza yönetim botuna hoş geldiniz.
 /giderler - Son giderleri listele
 /kar - Kar/zarar raporu
 /finans - Aylık finansal özet
+
+<b>💵 KASA YÖNETİMİ</b>
+/kasaac [tutar] - Günün başında kasa aç
+/kasakapat - Gün sonu kasa kapat & rapor
+
+<b>💲 TOPLU FİYAT</b>
+/zamekle [yüzde] - Tüm ürünlere zam
+/zamekle [yüzde] [SKU] - SKU'ya göre zam
+/zamekle [yüzde] "kategori" - Kategoriye zam
+/indirim [yüzde] - Tüm ürünlere indirim
+→ Onay için /onayla
 
 <b>📒 KASA DEFTERİ</b>
 Fotoğraf + caption: <code>/defter</code> veya <code>/kasa</code>
@@ -1668,7 +1752,7 @@ async function createProductWithPhoto(
   }
 
   // Ask for stock entry
-  message += `\n\n📦 <b>Stok girin (seri format):</b>\nÖrnek: <code>1 2 3 2 1</code>\n(S=1, M=2, L=3, XL=2, XXL=1)\n\nVeya tek sayı: <code>5</code>\n(Tüm bedenlere 5 adet)\n\n<i>/atla ile stok girişini atlayabilirsiniz</i>`;
+  message += `\n\n📦 <b>Stok girin (seri format):</b>\n${getStockEntryExample(sizes)}\n\nVeya tek sayı: <code>5</code>\n(Tüm bedenlere 5 adet)\n\n<i>/atla ile stok girişini atlayabilirsiniz</i>`;
 
   await sendMessage(chatId, message);
 
@@ -1744,7 +1828,7 @@ async function createProductWithVideo(
   }
 
   // Ask for stock entry
-  message += `\n\n📦 <b>Stok girin (seri format):</b>\nÖrnek: <code>1 2 3 2 1</code>\n(S=1, M=2, L=3, XL=2, XXL=1)\n\nVeya tek sayı: <code>5</code>\n(Tüm bedenlere 5 adet)\n\n<i>/atla ile stok girişini atlayabilirsiniz</i>`;
+  message += `\n\n📦 <b>Stok girin (seri format):</b>\n${getStockEntryExample(sizes)}\n\nVeya tek sayı: <code>5</code>\n(Tüm bedenlere 5 adet)\n\n<i>/atla ile stok girişini atlayabilirsiniz</i>`;
 
   await sendMessage(chatId, message);
 
@@ -2011,7 +2095,7 @@ async function createProductWithMultiplePhotos(
   }
 
   // Ask for stock entry
-  message += `\n\n📦 <b>Stok girin (seri format):</b>\nÖrnek: <code>1 2 3 2 1</code>\n(S=1, M=2, L=3, XL=2, XXL=1)\n\nVeya tek sayı: <code>5</code>\n(Tüm bedenlere 5 adet)\n\n<i>/atla ile stok girişini atlayabilirsiniz</i>`;
+  message += `\n\n📦 <b>Stok girin (seri format):</b>\n${getStockEntryExample(sizes)}\n\nVeya tek sayı: <code>5</code>\n(Tüm bedenlere 5 adet)\n\n<i>/atla ile stok girişini atlayabilirsiniz</i>`;
 
   await sendMessage(chatId, message);
 
@@ -2208,12 +2292,14 @@ async function handleTextInput(chatId: number, userId: number, text: string) {
 
     // Use suggested category name (will be auto-created if needed)
     const categoryName = analysis.suggestedCategory || undefined;
+    // Get correct sizes based on product type
+    const sizes = getSizesByType(analysis.productType, analysis.sizeType);
 
     if (photoUrls && photoUrls.length > 0) {
-      await createProductWithMultiplePhotos(chatId, sku, productName, price, photoUrls, categoryName, undefined, userId, videoUrls);
+      await createProductWithMultiplePhotos(chatId, sku, productName, price, photoUrls, categoryName, sizes, userId, videoUrls);
     } else if (videoUrls.length > 0) {
       // Only video(s), no photos - use video with thumbnail
-      await createProductWithVideo(chatId, sku, productName, price, videoUrls[0], analysis.suggestedCategorySlug || undefined, undefined, userId);
+      await createProductWithVideo(chatId, sku, productName, price, videoUrls[0], analysis.suggestedCategorySlug || undefined, sizes, userId);
     }
 
     // Don't delete state - create functions set new state for stock entry
@@ -2249,12 +2335,14 @@ async function handleTextInput(chatId: number, userId: number, text: string) {
 
     // Use suggested category name (will be auto-created if needed)
     const categoryName = analysis.suggestedCategory || undefined;
+    // Get correct sizes based on product type
+    const sizes = getSizesByType(analysis.productType, analysis.sizeType);
 
     if (photoUrls && photoUrls.length > 0) {
-      await createProductWithMultiplePhotos(chatId, sku, productName, price, photoUrls, categoryName, undefined, userId, videoUrls);
+      await createProductWithMultiplePhotos(chatId, sku, productName, price, photoUrls, categoryName, sizes, userId, videoUrls);
     } else if (videoUrls.length > 0) {
       // Only video(s), no photos - use video with thumbnail
-      await createProductWithVideo(chatId, sku, productName, price, videoUrls[0], analysis.suggestedCategorySlug || undefined, undefined, userId);
+      await createProductWithVideo(chatId, sku, productName, price, videoUrls[0], analysis.suggestedCategorySlug || undefined, sizes, userId);
     }
 
     // Don't delete state - create functions set new state for stock entry
@@ -2500,6 +2588,283 @@ async function handleFinans(chatId: number) {
   await sendMessage(chatId, message);
 }
 
+// ==========================================
+// KASA YÖNETİMİ KOMUTLARI
+// ==========================================
+
+// /kasaac [tutar] - Kasa aç
+async function handleKasaAc(chatId: number, args: string[]) {
+  if (args.length < 1) {
+    await sendMessage(chatId, "❌ Kullanım: /kasaac [tutar]\nÖrnek: /kasaac 5000");
+    return;
+  }
+
+  const amount = parseFloat(args[0]);
+  if (isNaN(amount) || amount < 0) {
+    await sendMessage(chatId, "❌ Geçersiz tutar.");
+    return;
+  }
+
+  const notes = args.slice(1).join(" ") || undefined;
+
+  const result = await apiCall("/cash-register", "POST", {
+    openingAmount: amount,
+    notes,
+  });
+
+  if (result.success) {
+    const today = new Date().toLocaleDateString("tr-TR", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+    await sendMessage(
+      chatId,
+      `✅ <b>KASA AÇILDI</b>\n\n📅 ${today}\n💵 Açılış: ${formatCurrency(amount)}${notes ? `\n📝 Not: ${notes}` : ""}\n\nGün sonu için: /kasakapat`
+    );
+  } else {
+    await sendMessage(chatId, `❌ ${result.error?.message || "Kasa açılamadı"}`);
+  }
+}
+
+// /kasakapat - Kasa kapat ve rapor al
+async function handleKasaKapat(chatId: number) {
+  const result = await apiCall("/cash-register/close", "POST", {});
+
+  if (!result.success) {
+    await sendMessage(chatId, `❌ ${result.error?.message || "Kasa kapatılamadı"}`);
+    return;
+  }
+
+  const r = result.data.report;
+  const diffEmoji = r.difference === 0 ? "✅" : r.difference > 0 ? "📈" : "📉";
+  const diffText = r.difference === 0 ? "Tam!" : r.difference > 0 ? `+${formatCurrency(r.difference)} fazla` : `${formatCurrency(r.difference)} eksik`;
+
+  let message = `💵 <b>KASA KAPANIŞ RAPORU</b>\n\n`;
+  message += `📂 Açılış: ${formatCurrency(r.openingAmount)}\n\n`;
+
+  message += `<b>💰 SATIŞLAR</b>\n`;
+  message += `• Nakit: ${formatCurrency(r.cashSales)}\n`;
+  message += `• Kart: ${formatCurrency(r.cardSales)}\n`;
+  message += `• Toplam: ${formatCurrency(r.totalSales)} (${r.salesCount} satış)\n\n`;
+
+  message += `<b>💸 GİDERLER</b>\n`;
+  message += `• Toplam: ${formatCurrency(r.totalExpenses)} (${r.expenseCount} gider)\n\n`;
+
+  message += `<b>📊 HESAPLAMA</b>\n`;
+  message += `Açılış + Nakit Satış - Gider\n`;
+  message += `${formatCurrency(r.openingAmount)} + ${formatCurrency(r.cashSales)} - ${formatCurrency(r.totalExpenses)}\n`;
+  message += `= <b>${formatCurrency(r.expectedClosing)}</b> (Beklenen)\n\n`;
+
+  message += `${diffEmoji} <b>Durum: ${diffText}</b>`;
+
+  await sendMessage(chatId, message);
+}
+
+// ==========================================
+// TOPLU FİYAT GÜNCELLEME KOMUTLARI
+// ==========================================
+
+// Pending bulk price update storage
+interface PendingPriceUpdate {
+  percentage: number;
+  action: "increase" | "decrease";
+  skuPrefix?: string;
+  categorySlug?: string;
+  count: number;
+}
+const pendingPriceUpdates: Map<number, PendingPriceUpdate> = new Map();
+
+// /zamekle [yüzde] [filtre] - Zam ekle (önizleme)
+async function handleZamEkle(chatId: number, userId: number, args: string[]) {
+  if (args.length < 1) {
+    await sendMessage(
+      chatId,
+      `❌ Kullanım:\n/zamekle [yüzde] - Tüm ürünlere\n/zamekle [yüzde] [SKU] - SKU başlangıcına göre\n/zamekle [yüzde] "kategori" - Kategoriye göre\n\nÖrnekler:\n• /zamekle 10\n• /zamekle 15 LCST\n• /zamekle 20 "Üst Giyim"`
+    );
+    return;
+  }
+
+  const percentage = parseFloat(args[0]);
+  if (isNaN(percentage) || percentage <= 0 || percentage > 100) {
+    await sendMessage(chatId, "❌ Geçerli bir yüzde girin (1-100)");
+    return;
+  }
+
+  // Parse filter
+  let skuPrefix: string | undefined;
+  let categorySlug: string | undefined;
+
+  if (args.length > 1) {
+    const filter = args.slice(1).join(" ");
+    // Check if it's a category (in quotes)
+    const categoryMatch = filter.match(/"([^"]+)"/);
+    if (categoryMatch) {
+      // Convert category name to slug
+      categorySlug = categoryMatch[1]
+        .toLowerCase()
+        .replace(/ı/g, "i")
+        .replace(/ö/g, "o")
+        .replace(/ü/g, "u")
+        .replace(/ş/g, "s")
+        .replace(/ç/g, "c")
+        .replace(/ğ/g, "g")
+        .replace(/\s+/g, "-");
+    } else {
+      skuPrefix = args[1].toUpperCase();
+    }
+  }
+
+  const result = await apiCall("/products/bulk-price", "POST", {
+    percentage,
+    action: "increase",
+    skuPrefix,
+    categorySlug,
+  });
+
+  if (!result.success) {
+    await sendMessage(chatId, `❌ ${result.error?.message || "Önizleme alınamadı"}`);
+    return;
+  }
+
+  const data = result.data;
+
+  // Store pending update
+  pendingPriceUpdates.set(userId, {
+    percentage,
+    action: "increase",
+    skuPrefix,
+    categorySlug,
+    count: data.count,
+  });
+
+  let filterText = "Tüm ürünler";
+  if (skuPrefix) filterText = `SKU: ${skuPrefix}*`;
+  if (categorySlug) filterText = `Kategori: ${categorySlug}`;
+
+  let message = `📈 <b>ZAM ÖNİZLEME</b>\n\n`;
+  message += `🎯 Filtre: ${filterText}\n`;
+  message += `📊 Etkilenen: <b>${data.count} ürün</b>\n`;
+  message += `📈 Zam: <b>%${percentage}</b>\n\n`;
+
+  message += `<b>Örnek ürünler:</b>\n`;
+  for (const p of data.preview.slice(0, 5)) {
+    message += `• ${p.sku}: ${formatCurrency(p.oldPrice)} → ${formatCurrency(p.newPrice)}\n`;
+  }
+
+  message += `\n⚠️ Onaylamak için /onayla yazın\n❌ İptal için /iptal`;
+
+  await sendMessage(chatId, message);
+}
+
+// /indirim [yüzde] [filtre] - İndirim uygula (önizleme)
+async function handleIndirim(chatId: number, userId: number, args: string[]) {
+  if (args.length < 1) {
+    await sendMessage(
+      chatId,
+      `❌ Kullanım:\n/indirim [yüzde] - Tüm ürünlere\n/indirim [yüzde] [SKU] - SKU başlangıcına göre\n/indirim [yüzde] "kategori" - Kategoriye göre\n\nÖrnekler:\n• /indirim 10\n• /indirim 15 LCST\n• /indirim 20 "Üst Giyim"`
+    );
+    return;
+  }
+
+  const percentage = parseFloat(args[0]);
+  if (isNaN(percentage) || percentage <= 0 || percentage > 100) {
+    await sendMessage(chatId, "❌ Geçerli bir yüzde girin (1-100)");
+    return;
+  }
+
+  // Parse filter
+  let skuPrefix: string | undefined;
+  let categorySlug: string | undefined;
+
+  if (args.length > 1) {
+    const filter = args.slice(1).join(" ");
+    const categoryMatch = filter.match(/"([^"]+)"/);
+    if (categoryMatch) {
+      categorySlug = categoryMatch[1]
+        .toLowerCase()
+        .replace(/ı/g, "i")
+        .replace(/ö/g, "o")
+        .replace(/ü/g, "u")
+        .replace(/ş/g, "s")
+        .replace(/ç/g, "c")
+        .replace(/ğ/g, "g")
+        .replace(/\s+/g, "-");
+    } else {
+      skuPrefix = args[1].toUpperCase();
+    }
+  }
+
+  const result = await apiCall("/products/bulk-price", "POST", {
+    percentage,
+    action: "decrease",
+    skuPrefix,
+    categorySlug,
+  });
+
+  if (!result.success) {
+    await sendMessage(chatId, `❌ ${result.error?.message || "Önizleme alınamadı"}`);
+    return;
+  }
+
+  const data = result.data;
+
+  // Store pending update
+  pendingPriceUpdates.set(userId, {
+    percentage,
+    action: "decrease",
+    skuPrefix,
+    categorySlug,
+    count: data.count,
+  });
+
+  let filterText = "Tüm ürünler";
+  if (skuPrefix) filterText = `SKU: ${skuPrefix}*`;
+  if (categorySlug) filterText = `Kategori: ${categorySlug}`;
+
+  let message = `📉 <b>İNDİRİM ÖNİZLEME</b>\n\n`;
+  message += `🎯 Filtre: ${filterText}\n`;
+  message += `📊 Etkilenen: <b>${data.count} ürün</b>\n`;
+  message += `📉 İndirim: <b>%${percentage}</b>\n\n`;
+
+  message += `<b>Örnek ürünler:</b>\n`;
+  for (const p of data.preview.slice(0, 5)) {
+    message += `• ${p.sku}: ${formatCurrency(p.oldPrice)} → ${formatCurrency(p.newPrice)}\n`;
+  }
+
+  message += `\n⚠️ Onaylamak için /onayla yazın\n❌ İptal için /iptal`;
+
+  await sendMessage(chatId, message);
+}
+
+// Handle price update confirmation
+async function handlePriceUpdateConfirm(chatId: number, userId: number): Promise<boolean> {
+  const pending = pendingPriceUpdates.get(userId);
+  if (!pending) return false;
+
+  pendingPriceUpdates.delete(userId);
+
+  const result = await apiCall("/products/bulk-price", "PUT", {
+    percentage: pending.percentage,
+    action: pending.action,
+    skuPrefix: pending.skuPrefix,
+    categorySlug: pending.categorySlug,
+  });
+
+  if (result.success) {
+    const actionText = pending.action === "increase" ? "zam" : "indirim";
+    await sendMessage(
+      chatId,
+      `✅ <b>${pending.count} ürüne %${pending.percentage} ${actionText} uygulandı!</b>`
+    );
+  } else {
+    await sendMessage(chatId, `❌ ${result.error?.message || "Güncelleme başarısız"}`);
+  }
+
+  return true;
+}
+
 // /defter or /kasa - Analyze ledger photo
 async function handleDefter(chatId: number, userId: number, imageUrl: string, prefetchedData?: { base64: string; mediaType: string }) {
   if (!prefetchedData) {
@@ -2563,10 +2928,16 @@ async function handleDefter(chatId: number, userId: number, imageUrl: string, pr
 
 // /onayla - Confirm and save ledger entries
 async function handleOnayla(chatId: number, userId: number) {
+  // Check for pending price update first
+  if (pendingPriceUpdates.has(userId)) {
+    await handlePriceUpdateConfirm(chatId, userId);
+    return;
+  }
+
   const state = userStates.get(userId);
 
   if (!state || state.action !== "ledger_confirm") {
-    await sendMessage(chatId, "❌ Onaylanacak bir defter kaydı yok.");
+    await sendMessage(chatId, "❌ Onaylanacak bir işlem yok.");
     return;
   }
 
@@ -2651,11 +3022,13 @@ async function handleSeriStok(chatId: number, args: string[]) {
       chatId,
       `❌ Kullanım: /seristok [SKU] [stok değerleri]\n\n` +
       `<b>Seri format:</b>\n` +
-      `<code>/seristok LCST05 1 2 3 3 2 1 1 1</code>\n` +
-      `(S=1, M=2, L=3, XL=3, XXL=2, 3XL=1, 4XL=1, 5XL=1)\n\n` +
-      `<b>Tek sayı:</b>\n` +
-      `<code>/seristok LCST05 5</code>\n` +
-      `(Tüm bedenlere 5 adet)`
+      `<code>/seristok LCST05 1 2 3 3 2 1 1 1</code>\n\n` +
+      `<b>Tek sayı (tüm bedenlere):</b>\n` +
+      `<code>/seristok LCST05 5</code>\n\n` +
+      `<i>Bedenler ürün tipine göre otomatik:</i>\n` +
+      `• Üst giyim: S-5XL (8 beden)\n` +
+      `• Alt giyim: 28-42 (8 beden)\n` +
+      `• Aksesuar: STD (1 beden)`
     );
     return;
   }
@@ -2862,6 +3235,18 @@ export async function handleUpdate(update: TelegramUpdate) {
       case "/finans":
         await handleFinans(chatId);
         break;
+      case "/kasaac":
+        await handleKasaAc(chatId, args);
+        break;
+      case "/kasakapat":
+        await handleKasaKapat(chatId);
+        break;
+      case "/zamekle":
+        await handleZamEkle(chatId, userId, args);
+        break;
+      case "/indirim":
+        await handleIndirim(chatId, userId, args);
+        break;
       case "/defter":
       case "/kasa":
         userStates.set(userId, { action: "wait_ledger_photo", data: {} });
@@ -2871,7 +3256,10 @@ export async function handleUpdate(update: TelegramUpdate) {
         await handleOnayla(chatId, userId);
         break;
       case "/iptal":
-        if (userStates.has(userId)) {
+        if (pendingPriceUpdates.has(userId)) {
+          pendingPriceUpdates.delete(userId);
+          await sendMessage(chatId, "❌ Fiyat güncelleme iptal edildi.");
+        } else if (userStates.has(userId)) {
           userStates.delete(userId);
           await sendMessage(chatId, "❌ İşlem iptal edildi.");
         } else {

@@ -117,3 +117,28 @@ model Expense {
   expenseDate DateTime @default(now())
   createdAt   DateTime @default(now())
 }
+
+model CashRegister {
+  id             Int       @id @default(autoincrement())
+  date           String    @unique // YYYY-MM-DD format
+  openingAmount  Float
+  closingAmount  Float?
+  expectedAmount Float?
+  difference     Float?
+  notes          String?
+  openedAt       DateTime  @default(now())
+  closedAt       DateTime?
+}
+
+model StockNotification {
+  id        Int      @id @default(autoincrement())
+  productId Int
+  variantId Int?
+  size      String?
+  email     String?
+  phone     String?
+  notified  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([productId])
+}

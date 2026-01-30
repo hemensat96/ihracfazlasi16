@@ -7,10 +7,15 @@ import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { NAV_LINKS, SITE_CONFIG } from "@/lib/constants";
 import { useCart } from "@/hooks/useCart";
+import { useFavorites } from "@/hooks/useFavorites";
+import { useTheme } from "@/contexts/ThemeContext";
+import SearchBar from "@/components/SearchBar";
 
 export default function Header() {
   const pathname = usePathname();
   const { cart, isLoaded } = useCart();
+  const { favorites, isLoaded: favoritesLoaded } = useFavorites();
+  const { theme, toggleTheme } = useTheme();
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -63,21 +68,68 @@ export default function Header() {
                   href={link.href}
                   className={`text-body transition-colors duration-200 ${
                     pathname === link.href
-                      ? "text-foreground font-medium"
-                      : "text-gray-500 hover:text-foreground"
+                      ? "text-foreground dark:text-white font-medium"
+                      : "text-gray-500 hover:text-foreground dark:hover:text-white"
                   }`}
                 >
                   {link.label}
                 </Link>
               ))}
+              <SearchBar />
             </div>
 
-            {/* Cart & Mobile Menu */}
-            <div className="flex items-center gap-4">
+            {/* Search, Theme, Favorites, Cart & Mobile Menu */}
+            <div className="flex items-center gap-2 sm:gap-4">
+              {/* Mobile Search */}
+              <SearchBar />
+
+              {/* Theme Toggle */}
+              <button
+                onClick={toggleTheme}
+                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
+                aria-label={theme === "light" ? "Karanlik mod" : "Aydinlik mod"}
+              >
+                {theme === "light" ? (
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" />
+                  </svg>
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
+                  </svg>
+                )}
+              </button>
+
+              {/* Favorites Button */}
+              <Link
+                href="/favoriler"
+                className="relative p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={1.5}
+                  stroke="currentColor"
+                  className="w-6 h-6"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"
+                  />
+                </svg>
+                {favoritesLoaded && favorites.count > 0 && (
+                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs font-medium rounded-full flex items-center justify-center">
+                    {favorites.count}
+                  </span>
+                )}
+              </Link>
+
               {/* Cart Button */}
               <Link
                 href="/sepet"
-                className="relative p-2 hover:bg-gray-100 rounded-full transition-colors"
+                className="relative p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"

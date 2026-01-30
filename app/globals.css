@@ -19,6 +19,16 @@
     @apply bg-background text-foreground font-sans;
   }
 
+  /* Dark mode styles */
+  .dark {
+    --background: #0a0a0a;
+    --foreground: #fafafa;
+  }
+
+  .dark body {
+    @apply bg-[#0a0a0a] text-[#fafafa];
+  }
+
   /* Apple-style focus ring */
   :focus-visible {
     @apply outline-none ring-2 ring-accent ring-offset-2;
@@ -68,7 +78,7 @@
 
   /* Apple-style card */
   .card {
-    @apply bg-white rounded-apple p-6 shadow-apple
+    @apply bg-white dark:bg-gray-900 rounded-apple p-6 shadow-apple
            transition-all duration-apple ease-apple
            hover:shadow-apple-hover;
   }
@@ -104,9 +114,9 @@
 
   /* Input styles */
   .input {
-    @apply w-full px-4 py-3 bg-gray-100 border-none rounded-apple-sm
-           text-foreground placeholder:text-gray-500
-           focus:ring-2 focus:ring-accent focus:bg-white
+    @apply w-full px-4 py-3 bg-gray-100 dark:bg-gray-800 border-none rounded-apple-sm
+           text-foreground dark:text-white placeholder:text-gray-500
+           focus:ring-2 focus:ring-accent focus:bg-white dark:focus:bg-gray-700
            transition-all duration-200;
   }
 
@@ -161,6 +171,6 @@
 
   /* Glass effect */
   .glass {
-    @apply bg-white/80 backdrop-blur-lg;
+    @apply bg-white/80 dark:bg-gray-900/80 backdrop-blur-lg;
   }
 }

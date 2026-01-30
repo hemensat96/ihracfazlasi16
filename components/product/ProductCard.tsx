@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { formatPrice, getStockStatus, slugify, sortSizes } from "@/lib/utils";
+import { useFavorites } from "@/hooks/useFavorites";
 import type { Product } from "@/types";
 
 interface ProductCardProps {
@@ -14,6 +15,21 @@ export default function ProductCard({ product }: ProductCardProps) {
   const stockStatus = getStockStatus(product.totalStock || 0);
   const slug = slugify(product.name);
   const primaryImage = product.primaryImage || product.images?.[0]?.imageUrl;
+  const { isFavorite, toggleFavorite } = useFavorites();
+  const isFav = isFavorite(product.id);
+
+  const handleFavoriteClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleFavorite({
+      id: product.id,
+      sku: product.sku,
+      name: product.name,
+      price: product.price,
+      primaryImage,
+      slug: `${slug}-${product.id}`,
+    });
+  };
 
   return (
     <Link href={`/urunler/${slug}-${product.id}`} className="group block w-full">
@@ -62,6 +78,28 @@ export default function ProductCard({ product }: ProductCardProps) {
               </span>
             </div>
           )}
+
+          {/* Favorite Button */}
+          <button
+            onClick={handleFavoriteClick}
+            className="absolute top-2 right-2 sm:top-3 sm:right-3 w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center bg-white/90 backdrop-blur-sm rounded-full shadow-sm hover:bg-white hover:scale-110 transition-all z-10"
+            aria-label={isFav ? "Favorilerden cikar" : "Favorilere ekle"}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill={isFav ? "currentColor" : "none"}
+              stroke="currentColor"
+              strokeWidth={isFav ? 0 : 1.5}
+              className={`w-4 h-4 sm:w-5 sm:h-5 transition-colors ${isFav ? "text-red-500" : "text-gray-600"}`}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"
+              />
+            </svg>
+          </button>
 
           {/* Quick View on Hover - Desktop only */}
           <div className="hidden sm:flex absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-apple items-center justify-center opacity-0 group-hover:opacity-100">

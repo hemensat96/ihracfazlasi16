@@ -3,6 +3,9 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
+import WhatsAppWidget from "@/components/WhatsAppWidget";
+import StickyCartBar from "@/components/StickyCartBar";
+import Providers from "@/components/Providers";
 import { SITE_CONFIG, STORE_INFO, BRANDS } from "@/lib/constants";
 
 const inter = Inter({
@@ -118,17 +121,21 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="tr" className={inter.variable}>
+    <html lang="tr" className={inter.variable} suppressHydrationWarning>
       <head>
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
       </head>
-      <body className="min-h-screen flex flex-col">
-        <Header />
-        <main className="flex-1">{children}</main>
-        <Footer />
+      <body className="min-h-screen flex flex-col bg-white dark:bg-[#0a0a0a] text-foreground dark:text-white transition-colors">
+        <Providers>
+          <Header />
+          <main className="flex-1">{children}</main>
+          <Footer />
+          <WhatsAppWidget />
+          <StickyCartBar />
+        </Providers>
       </body>
     </html>
   );

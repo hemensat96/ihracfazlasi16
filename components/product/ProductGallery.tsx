@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, TouchEvent, useCallback } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -20,7 +20,43 @@ function isVideoUrl(url: string): boolean {
 export default function ProductGallery({ images, productName }: ProductGalleryProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [isZoomed, setIsZoomed] = useState(false);
+  const [touchStart, setTouchStart] = useState<number | null>(null);
+  const [touchEnd, setTouchEnd] = useState<number | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  // Minimum swipe distance
+  const minSwipeDistance = 50;
+
+  const goNext = useCallback(() => {
+    setSelectedIndex((prev) => (prev === images.length - 1 ? 0 : prev + 1));
+  }, [images.length]);
+
+  const goPrev = useCallback(() => {
+    setSelectedIndex((prev) => (prev === 0 ? images.length - 1 : prev - 1));
+  }, [images.length]);
+
+  const handleTouchStart = (e: TouchEvent) => {
+    setTouchEnd(null);
+    setTouchStart(e.targetTouches[0].clientX);
+  };
+
+  const handleTouchMove = (e: TouchEvent) => {
+    setTouchEnd(e.targetTouches[0].clientX);
+  };
+
+  const handleTouchEnd = () => {
+    if (!touchStart || !touchEnd) return;
+    const distance = touchStart - touchEnd;
+    const isLeftSwipe = distance > minSwipeDistance;
+    const isRightSwipe = distance < -minSwipeDistance;
+
+    if (isLeftSwipe && images.length > 1) {
+      goNext();
+    }
+    if (isRightSwipe && images.length > 1) {
+      goPrev();
+    }
+  };
 
   const currentMedia = images[selectedIndex];
   const isCurrentVideo = currentMedia ? isVideoUrl(currentMedia.imageUrl) : false;
@@ -51,8 +87,11 @@ export default function ProductGallery({ images, productName }: ProductGalleryPr
       <div className="space-y-4">
         {/* Main Image/Video */}
         <div
-          className={`relative aspect-square bg-gray-100 rounded-apple overflow-hidden ${!isCurrentVideo ? 'cursor-zoom-in' : ''}`}
+          className={`relative aspect-square bg-gray-100 dark:bg-gray-800 rounded-apple overflow-hidden ${!isCurrentVideo ? 'cursor-zoom-in' : ''}`}
           onClick={() => !isCurrentVideo && setIsZoomed(true)}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
         >
           <AnimatePresence mode="wait">
             <motion.div
@@ -86,15 +125,15 @@ export default function ProductGallery({ images, productName }: ProductGalleryPr
             </motion.div>
           </AnimatePresence>
 
-          {/* Navigation Arrows */}
+          {/* Navigation Arrows - Desktop */}
           {images.length > 1 && (
             <>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  setSelectedIndex((prev) => (prev === 0 ? images.length - 1 : prev - 1));
+                  goPrev();
                 }}
-                className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/80 backdrop-blur rounded-full flex items-center justify-center hover:bg-white transition-colors"
+                className="hidden sm:flex absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/80 dark:bg-gray-800/80 backdrop-blur rounded-full items-center justify-center hover:bg-white dark:hover:bg-gray-700 transition-colors"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -110,9 +149,9 @@ export default function ProductGallery({ images, productName }: ProductGalleryPr
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  setSelectedIndex((prev) => (prev === images.length - 1 ? 0 : prev + 1));
+                  goNext();
                 }}
-                className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/80 backdrop-blur rounded-full flex items-center justify-center hover:bg-white transition-colors"
+                className="hidden sm:flex absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/80 dark:bg-gray-800/80 backdrop-blur rounded-full items-center justify-center hover:bg-white dark:hover:bg-gray-700 transition-colors"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -126,6 +165,21 @@ export default function ProductGallery({ images, productName }: ProductGalleryPr
                 </svg>
               </button>
             </>
+          )}
+
+          {/* Dot Indicators - Mobile */}
+          {images.length > 1 && (
+            <div className="sm:hidden absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
+              {images.map((_, idx) => (
+                <button
+                  key={idx}
+                  onClick={(e) => { e.stopPropagation(); setSelectedIndex(idx); }}
+                  className={`w-2 h-2 rounded-full transition-all ${
+                    idx === selectedIndex ? "bg-white w-6 shadow-md" : "bg-white/60"
+                  }`}
+                />
+              ))}
+            </div>
           )}
         </div>
 
