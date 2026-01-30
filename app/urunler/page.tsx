@@ -3,11 +3,28 @@ import { Metadata } from "next";
 import ProductGrid from "@/components/product/ProductGrid";
 import ProductFilters from "@/components/product/ProductFilters";
 import { prisma } from "@/lib/prisma";
+import { SITE_CONFIG, BRANDS } from "@/lib/constants";
 import type { Product, Category } from "@/types";
 
 export const metadata: Metadata = {
-  title: "Ürünler",
-  description: "Kaliteli ihraç fazlası giyim ürünlerimizi keşfedin",
+  title: "Ürünler | Dünya Markaları Erkek Giyim",
+  description: `İhraç fazlası orijinal erkek giyim ürünleri. ${BRANDS.slice(0, 5).join(", ")} ve daha fazlası. Bursa İnegöl'de uygun fiyatlarla.`,
+  keywords: [
+    "ihraç fazlası ürünler",
+    "erkek giyim",
+    "dünya markaları",
+    ...BRANDS,
+    "Bursa",
+    "İnegöl",
+  ],
+  alternates: {
+    canonical: `${SITE_CONFIG.url}/urunler`,
+  },
+  openGraph: {
+    title: "Ürünler | İhraç Fazlası Giyim",
+    description: "Dünya markalarından ihraç fazlası erkek giyim ürünleri",
+    url: `${SITE_CONFIG.url}/urunler`,
+  },
 };
 
 interface PageProps {

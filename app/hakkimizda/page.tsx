@@ -3,7 +3,22 @@ import { SITE_CONFIG, WHATSAPP_PHONE, BRANDS, STORE_INFO } from "@/lib/constants
 
 export const metadata: Metadata = {
   title: "Hakkımızda",
-  description: `${SITE_CONFIG.name} - Bursa İnegöl'de dünya markalarının ihraç fazlası ithal erkek giyim ürünleri`,
+  description: `${SITE_CONFIG.name} - Bursa İnegöl'de dünya markalarının ihraç fazlası ithal erkek giyim ürünleri. Prada, Lacoste, Tommy Hilfiger, Hugo Boss ve daha fazlası.`,
+  keywords: [
+    "hakkımızda",
+    "ihraç fazlası",
+    "Bursa İnegöl",
+    "erkek giyim mağazası",
+    ...BRANDS,
+  ],
+  alternates: {
+    canonical: `${SITE_CONFIG.url}/hakkimizda`,
+  },
+  openGraph: {
+    title: "Hakkımızda | İhraç Fazlası Giyim",
+    description: `Bursa İnegöl'de dünya markalarının ihraç fazlası ithal erkek giyim ürünleri`,
+    url: `${SITE_CONFIG.url}/hakkimizda`,
+  },
 };
 
 export default function AboutPage() {

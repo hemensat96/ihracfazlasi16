@@ -2,6 +2,7 @@ import { Metadata } from "next";
 import { notFound } from "next/navigation";
 import ProductGrid from "@/components/product/ProductGrid";
 import { prisma } from "@/lib/prisma";
+import { SITE_CONFIG, BRANDS } from "@/lib/constants";
 import type { Product, Category } from "@/types";
 
 interface PageProps {
@@ -53,9 +54,28 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     return { title: "Kategori Bulunamadı" };
   }
 
+  const categoryUrl = `${SITE_CONFIG.url}/kategori/${slug}`;
+  const description = `${category.name} kategorisindeki ihraç fazlası erkek giyim ürünleri. ${BRANDS.slice(0, 5).join(", ")} ve daha fazlası. Bursa İnegöl'de uygun fiyatlarla.`;
+
   return {
-    title: category.name,
-    description: `${category.name} kategorisindeki tüm ürünler`,
+    title: `${category.name} | Erkek Giyim`,
+    description,
+    keywords: [
+      category.name,
+      "ihraç fazlası",
+      "erkek giyim",
+      ...BRANDS.slice(0, 5),
+      "Bursa",
+      "İnegöl",
+    ],
+    alternates: {
+      canonical: categoryUrl,
+    },
+    openGraph: {
+      title: `${category.name} | İhraç Fazlası Giyim`,
+      description,
+      url: categoryUrl,
+    },
   };
 }
 

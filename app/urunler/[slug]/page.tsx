@@ -6,8 +6,8 @@ import AddToCartButton from "@/components/product/AddToCartButton";
 import ShareButtons from "@/components/share/ShareButtons";
 import FeaturedProducts from "@/components/home/FeaturedProducts";
 import { prisma } from "@/lib/prisma";
-import { formatPrice } from "@/lib/utils";
-import { WHATSAPP_PHONE } from "@/lib/constants";
+import { formatPrice, slugify } from "@/lib/utils";
+import { WHATSAPP_PHONE, SITE_CONFIG, STORE_INFO } from "@/lib/constants";
 import type { Product } from "@/types";
 
 interface PageProps {
@@ -82,13 +82,41 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     return { title: "Ürün Bulunamadı" };
   }
 
+  const productUrl = `${SITE_CONFIG.url}/urunler/${slugify(product.name)}-${product.id}`;
+  const description = product.description ||
+    `${product.name} - ${formatPrice(product.price)} | İhraç fazlası orijinal ürün. Bursa İnegöl'de mağazamızdan veya online sipariş verin.`;
+
   return {
-    title: product.name,
-    description: product.description || `${product.name} - ${formatPrice(product.price)}`,
+    title: `${product.name} | ${formatPrice(product.price)}`,
+    description,
+    keywords: [
+      product.name,
+      product.sku,
+      product.category?.name || "giyim",
+      "ihraç fazlası",
+      "erkek giyim",
+      "Bursa",
+      "İnegöl",
+    ],
     openGraph: {
       title: product.name,
-      description: product.description || undefined,
+      description,
+      url: productUrl,
+      images: product.primaryImage ? [{
+        url: product.primaryImage,
+        width: 800,
+        height: 800,
+        alt: product.name,
+      }] : undefined,
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: product.name,
+      description,
       images: product.primaryImage ? [product.primaryImage] : undefined,
+    },
+    alternates: {
+      canonical: productUrl,
     },
   };
 }
@@ -107,8 +135,80 @@ export default async function ProductDetailPage({ params }: PageProps) {
   const whatsappMessage = `Merhaba! "${product.name}" (${product.sku}) ürünü hakkında bilgi almak istiyorum.`;
   const whatsappLink = `https://wa.me/${WHATSAPP_PHONE}?text=${encodeURIComponent(whatsappMessage)}`;
 
+  // Product Schema JSON-LD
+  const productUrl = `${SITE_CONFIG.url}/urunler/${slugify(product.name)}-${product.id}`;
+  const productSchema = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: product.name,
+    description: product.description || `${product.name} - İhraç fazlası orijinal ürün`,
+    image: product.images?.map(img => img.imageUrl) || [],
+    sku: product.sku,
+    brand: {
+      "@type": "Brand",
+      name: product.name.split(" ")[0], // First word is usually brand
+    },
+    offers: {
+      "@type": "Offer",
+      url: productUrl,
+      priceCurrency: "TRY",
+      price: product.price,
+      availability: (product.totalStock ?? 0) > 0
+        ? "https://schema.org/InStock"
+        : "https://schema.org/OutOfStock",
+      seller: {
+        "@type": "Organization",
+        name: STORE_INFO.name,
+      },
+    },
+    category: product.category?.name || "Giyim",
+  };
+
+  // BreadcrumbList Schema JSON-LD
+  const breadcrumbSchema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      {
+        "@type": "ListItem",
+        position: 1,
+        name: "Ana Sayfa",
+        item: SITE_CONFIG.url,
+      },
+      {
+        "@type": "ListItem",
+        position: 2,
+        name: "Ürünler",
+        item: `${SITE_CONFIG.url}/urunler`,
+      },
+      ...(product.category ? [{
+        "@type": "ListItem",
+        position: 3,
+        name: product.category.name,
+        item: `${SITE_CONFIG.url}/kategori/${product.category.slug}`,
+      }] : []),
+      {
+        "@type": "ListItem",
+        position: product.category ? 4 : 3,
+        name: product.name,
+        item: productUrl,
+      },
+    ],
+  };
+
   return (
     <>
+      {/* Product Schema */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(productSchema) }}
+      />
+      {/* Breadcrumb Schema */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
+      />
+
       <div className="section-sm">
         <div className="container-wide">
           {/* Breadcrumb */}

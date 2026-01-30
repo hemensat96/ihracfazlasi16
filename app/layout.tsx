@@ -15,6 +15,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_CONFIG.url || "https://ihracfazlasigiyim.com"),
   title: {
     default: `${SITE_CONFIG.name} | Dünya Markaları Erkek Giyim - Bursa İnegöl`,
     template: `%s | ${SITE_CONFIG.shortName}`,
