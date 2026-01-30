@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { formatPrice } from "@/lib/utils";
+import { formatPrice, slugify } from "@/lib/utils";
 
 interface ShareButtonsProps {
   product: {
@@ -176,14 +176,16 @@ export default function ShareButtons({ product, productUrl }: ShareButtonsProps)
           const url = URL.createObjectURL(blob);
           const a = document.createElement("a");
           a.href = url;
-          a.download = `${product.sku}-story.png`;
+          // Use product name for filename, slugified for safe filenames
+          const safeFileName = slugify(product.name) || product.sku;
+          a.download = `${safeFileName}-story.png`;
           document.body.appendChild(a);
           a.click();
           document.body.removeChild(a);
           URL.revokeObjectURL(url);
         }
         setGeneratingStory(false);
-      }, "image/png");
+      }, "image/png", 1.0);
     } catch {
       setGeneratingStory(false);
     }

@@ -78,10 +78,12 @@ export default function Header() {
               <SearchBar />
             </div>
 
-            {/* Search, Theme, Favorites, Cart & Mobile Menu */}
+            {/* Theme, Favorites, Cart & Mobile Menu */}
             <div className="flex items-center gap-2 sm:gap-4">
-              {/* Mobile Search */}
-              <SearchBar />
+              {/* Mobile Search - only show on mobile */}
+              <div className="md:hidden">
+                <SearchBar />
+              </div>
 
               {/* Theme Toggle */}
               <button

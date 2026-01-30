@@ -43,12 +43,12 @@ export default async function HomePage() {
     <>
       <Hero />
       <Categories />
-      <PromoVideo />
       <FeaturedProducts
         products={featuredProducts}
-        title="Yeni Gelenler"
+        title="Yeni Eklenen Ürünler"
         subtitle="En son eklenen ürünlerimizi keşfedin"
       />
+      <PromoVideo />
       <WhatsAppCTA />
     </>
   );

@@ -5,6 +5,16 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://ihracfazlasigiyim.
 const SITE_API = process.env.TELEGRAM_SITE_API || `${SITE_URL}/api/v1`;
 const API_KEY = process.env.API_SECRET_KEY || "";
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
+
+// Daily report settings (stored in memory, reset on deploy)
+interface ReportSettings {
+  chatId: number;
+  hour: number;
+  minute: number;
+  enabled: boolean;
+}
+const reportSettings: Map<number, ReportSettings> = new Map();
 
 // Known brands we sell with SKU prefixes
 const BRAND_SKU_MAP: Record<string, string> = {
@@ -135,6 +145,14 @@ export interface TelegramVideo {
   file_size?: number;
 }
 
+export interface TelegramVoice {
+  file_id: string;
+  file_unique_id: string;
+  duration: number;
+  mime_type?: string;
+  file_size?: number;
+}
+
 export interface TelegramMessage {
   message_id: number;
   from?: TelegramUser;
@@ -143,6 +161,7 @@ export interface TelegramMessage {
   text?: string;
   photo?: TelegramPhoto[];
   video?: TelegramVideo;
+  voice?: TelegramVoice;
   caption?: string;
   media_group_id?: string;
 }
@@ -831,12 +850,17 @@ Merhaba! Mağaza yönetim botuna hoş geldiniz.
    • Aksesuar: STD
 6. Ürün tamamlandı! ✅
 
+<b>🎤 SESLİ KOMUT</b>
+Ses mesajı gönderin, AI komutu anlayıp çalıştırır!
+Örnek: "TH05 stoğunu göster" veya "bugünkü satışlar"
+
 <b>📦 ÜRÜN YÖNETİMİ</b>
 /urunekle - Yeni ürün ekle
 /urunler - Ürün listesi
 /urunsil [SKU] - Ürün sil
 /fiyat [SKU] [fiyat] - Fiyat güncelle
 /foto [SKU] - Ürüne fotoğraf ekle
+/fotografekle [SKU] - Mevcut ürüne fotoğraf ekle
 /fotograflar [SKU] - Ürün fotoğraflarını listele
 
 <b>📊 STOK YÖNETİMİ</b>
@@ -846,6 +870,7 @@ Merhaba! Mağaza yönetim botuna hoş geldiniz.
 /stokekle [SKU] [beden] [adet] - Tek stok ekle
 /stokdus [SKU] [beden] [adet] - Stok düş
 /dusukstok - Düşük stokları göster
+/stokoner - Stok sipariş önerileri
 
 <b>💰 SATIŞ</b>
 /sat [SKU] [beden] [adet] [fiyat] - Satış kaydet
@@ -857,6 +882,8 @@ Merhaba! Mağaza yönetim botuna hoş geldiniz.
 /haftalik - Haftalık rapor
 /aylik - Aylık rapor
 /ciro - Anlık ciro
+/raporayarla [saat] - Günlük otomatik rapor
+  Örnek: <code>/raporayarla 21:00</code>
 
 <b>💸 GİDER & FİNANS</b>
 /gider [tutar] [kategori] [açıklama] - Gider ekle
@@ -1026,6 +1053,417 @@ async function handleDusukStok(chatId: number) {
   }
 
   await sendMessage(chatId, message);
+}
+
+// ==========================================
+// SESLİ KOMUT - VOICE COMMAND HANDLER
+// ==========================================
+
+// Handle voice message with OpenAI Whisper
+async function handleVoice(chatId: number, userId: number, voice: { file_id: string; duration: number }) {
+  if (!OPENAI_API_KEY) {
+    await sendMessage(chatId, "❌ Sesli komut şu an aktif değil. OPENAI_API_KEY ayarlanmamış.");
+    return;
+  }
+
+  await sendMessage(chatId, "🎤 Ses mesajı alındı, işleniyor...");
+
+  try {
+    // Get file path from Telegram
+    const fileResponse = await fetch(`${TELEGRAM_API}/getFile?file_id=${voice.file_id}`);
+    const fileData = await fileResponse.json();
+
+    if (!fileData.ok || !fileData.result?.file_path) {
+      throw new Error("Ses dosyası alınamadı");
+    }
+
+    // Download voice file
+    const voiceUrl = `https://api.telegram.org/file/bot${BOT_TOKEN}/${fileData.result.file_path}`;
+    const voiceResponse = await fetch(voiceUrl);
+    const voiceBuffer = await voiceResponse.arrayBuffer();
+
+    // Convert to base64 for OpenAI
+    const voiceBase64 = Buffer.from(voiceBuffer).toString("base64");
+
+    // Transcribe with OpenAI Whisper
+    const formData = new FormData();
+    const blob = new Blob([Buffer.from(voiceBase64, "base64")], { type: "audio/ogg" });
+    formData.append("file", blob, "voice.ogg");
+    formData.append("model", "whisper-1");
+    formData.append("language", "tr");
+
+    const whisperResponse = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${OPENAI_API_KEY}`,
+      },
+      body: formData,
+    });
+
+    if (!whisperResponse.ok) {
+      const errorText = await whisperResponse.text();
+      console.error("Whisper API error:", errorText);
+      throw new Error("Ses metne çevrilemedi");
+    }
+
+    const whisperResult = await whisperResponse.json();
+    const transcribedText = whisperResult.text?.trim();
+
+    if (!transcribedText) {
+      await sendMessage(chatId, "❌ Ses anlaşılamadı. Lütfen tekrar deneyin.");
+      return;
+    }
+
+    await sendMessage(chatId, `🎤 <b>Algılanan:</b> "${transcribedText}"\n\n🤖 Komut işleniyor...`);
+
+    // Use Claude to interpret the command
+    const commandResponse = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 300,
+        messages: [
+          {
+            role: "user",
+            content: `Bir mağaza yönetim sistemindeki sesli komutu yorumla. Kullanıcının ne yapmak istediğini anla ve uygun Telegram bot komutuna çevir.
+
+Mevcut komutlar:
+- /stok [SKU] - Stok sorgula
+- /sat [SKU] [beden] [adet] [fiyat] - Satış kaydet
+- /fiyat [SKU] [yenifiyat] - Fiyat güncelle
+- /stokekle [SKU] [beden] [adet] - Stok ekle
+- /stokdus [SKU] [beden] [adet] - Stok düş
+- /dusukstok - Düşük stokları göster
+- /gunluk - Günlük rapor
+- /haftalik - Haftalık rapor
+- /aylik - Aylık rapor
+- /ciro - Anlık ciro
+- /urunler - Ürün listesi
+
+Kullanıcının söylediği: "${transcribedText}"
+
+JSON formatında yanıt ver:
+{
+  "command": "/komut arg1 arg2...",
+  "explanation": "Ne yapılacağının kısa açıklaması"
+}
+
+Eğer anlayamadıysan:
+{
+  "command": null,
+  "explanation": "Anlaşılamadı"
+}`
+          }
+        ],
+      }),
+    });
+
+    if (!commandResponse.ok) {
+      throw new Error("Komut yorumlanamadı");
+    }
+
+    const commandResult = await commandResponse.json();
+    const textContent = commandResult.content?.find((c: { type: string }) => c.type === "text");
+
+    if (!textContent?.text) {
+      throw new Error("Claude yanıt vermedi");
+    }
+
+    // Parse JSON from response
+    const jsonMatch = textContent.text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error("JSON parse hatası");
+    }
+
+    const interpreted = JSON.parse(jsonMatch[0]);
+
+    if (!interpreted.command) {
+      await sendMessage(chatId, `❓ Komut anlaşılamadı.\n\n<i>Söylediğiniz:</i> "${transcribedText}"\n\n<i>Örnek komutlar:</i>\n• "TH05 stoğunu göster"\n• "Bugünkü satışları göster"\n• "Lacoste polo 450 liraya sat M beden"`);
+      return;
+    }
+
+    await sendMessage(chatId, `✅ <b>Komut:</b> <code>${interpreted.command}</code>\n📝 ${interpreted.explanation}\n\n<i>Komut çalıştırılıyor...</i>`);
+
+    // Execute the interpreted command
+    const parts = interpreted.command.trim().split(/\s+/);
+    const command = parts[0].toLowerCase();
+    const args = parts.slice(1);
+
+    // Route to appropriate handler
+    switch (command) {
+      case "/stok":
+        await handleStok(chatId, args);
+        break;
+      case "/sat":
+        await handleSat(chatId, args);
+        break;
+      case "/fiyat":
+        await handleFiyat(chatId, args);
+        break;
+      case "/stokekle":
+        await handleStokEkle(chatId, args);
+        break;
+      case "/stokdus":
+        await handleStokDus(chatId, args);
+        break;
+      case "/dusukstok":
+        await handleDusukStok(chatId);
+        break;
+      case "/gunluk":
+        await handleGunluk(chatId);
+        break;
+      case "/haftalik":
+        await handleHaftalik(chatId);
+        break;
+      case "/aylik":
+        await handleAylik(chatId);
+        break;
+      case "/ciro":
+        await handleCiro(chatId);
+        break;
+      case "/urunler":
+        await handleUrunler(chatId);
+        break;
+      default:
+        await sendMessage(chatId, `❓ Komut desteklenmiyor: ${command}`);
+    }
+
+  } catch (error) {
+    console.error("Voice command error:", error);
+    await sendMessage(chatId, `❌ Sesli komut işlenirken hata oluştu.\n\n<i>Lütfen yazılı komut kullanın veya tekrar deneyin.</i>`);
+  }
+}
+
+// ==========================================
+// STOK ÖNERİ - STOCK SUGGESTION
+// ==========================================
+
+// /stokoner - Stock reorder suggestions
+async function handleStokOner(chatId: number) {
+  await sendMessage(chatId, "📊 Stok önerileri hesaplanıyor...");
+
+  try {
+    // Get all products with low stock
+    const lowStockResult = await apiCall("/stock/low?threshold=5");
+
+    // Get recent sales to understand demand
+    const salesResult = await apiCall("/sales?limit=100");
+
+    if (!lowStockResult.success) {
+      await sendMessage(chatId, "❌ Stok bilgisi alınamadı.");
+      return;
+    }
+
+    const lowStockItems = lowStockResult.data || [];
+    const sales = salesResult.data?.items || [];
+
+    // Calculate demand per product
+    const demandMap: Record<string, { count: number; sizes: Record<string, number> }> = {};
+
+    for (const sale of sales) {
+      const key = sale.sku || sale.productId;
+      if (!demandMap[key]) {
+        demandMap[key] = { count: 0, sizes: {} };
+      }
+      demandMap[key].count += sale.quantity || 1;
+      const size = sale.size || "STD";
+      demandMap[key].sizes[size] = (demandMap[key].sizes[size] || 0) + (sale.quantity || 1);
+    }
+
+    let message = "📦 <b>STOK ÖNERİLERİ</b>\n\n";
+
+    if (lowStockItems.length === 0) {
+      message += "✅ Kritik stok durumu yok!\n\n";
+    } else {
+      message += "<b>🔴 Acil Sipariş Gerekli:</b>\n";
+
+      const urgentItems = lowStockItems.filter((item: { stock: number }) => item.stock <= 2);
+      const warningItems = lowStockItems.filter((item: { stock: number }) => item.stock > 2 && item.stock <= 5);
+
+      for (const item of urgentItems.slice(0, 10)) {
+        const demand = demandMap[item.productSku]?.count || 0;
+        const suggestedOrder = Math.max(10, demand * 2);
+        message += `• <b>${item.productSku}</b> ${item.size || ""}\n`;
+        message += `  Stok: ${item.stock} | Talep: ${demand} | Öneri: +${suggestedOrder}\n`;
+      }
+
+      if (warningItems.length > 0) {
+        message += "\n<b>🟡 Yakında Sipariş:</b>\n";
+        for (const item of warningItems.slice(0, 5)) {
+          message += `• <b>${item.productSku}</b> ${item.size || ""}: ${item.stock} adet\n`;
+        }
+      }
+    }
+
+    // Top selling products
+    const topProducts = Object.entries(demandMap)
+      .sort((a, b) => b[1].count - a[1].count)
+      .slice(0, 5);
+
+    if (topProducts.length > 0) {
+      message += "\n<b>🔥 En Çok Satan (Son Dönem):</b>\n";
+      for (const [sku, data] of topProducts) {
+        message += `• ${sku}: ${data.count} adet satış\n`;
+      }
+    }
+
+    message += "\n<i>💡 Öneri: Yüksek talep + düşük stok = öncelikli sipariş</i>";
+
+    await sendMessage(chatId, message);
+
+  } catch (error) {
+    console.error("Stock suggestion error:", error);
+    await sendMessage(chatId, "❌ Stok önerileri hesaplanırken hata oluştu.");
+  }
+}
+
+// ==========================================
+// FİYAT ÖNERİSİ - PRICE SUGGESTION
+// ==========================================
+
+// Get price suggestions for similar products
+async function getPriceSuggestion(brand: string | null, productType: string): Promise<string | null> {
+  try {
+    // Get all products to find similar ones
+    const result = await apiCall("/products?limit=100");
+    if (!result.success || !result.data?.items) return null;
+
+    const products = result.data.items;
+    const similarProducts: { name: string; price: number }[] = [];
+
+    const lowerType = productType.toLowerCase();
+    const lowerBrand = brand?.toLowerCase() || "";
+
+    for (const product of products) {
+      const productName = product.name.toLowerCase();
+
+      // Check if same brand
+      const sameBrand = lowerBrand && productName.includes(lowerBrand);
+      // Check if similar type
+      const sameType = productName.includes(lowerType) ||
+        (lowerType.includes("polo") && productName.includes("polo")) ||
+        (lowerType.includes("t-shirt") && (productName.includes("tişört") || productName.includes("t-shirt"))) ||
+        (lowerType.includes("gömlek") && productName.includes("gömlek")) ||
+        (lowerType.includes("pantolon") && productName.includes("pantolon"));
+
+      if (sameBrand || sameType) {
+        similarProducts.push({ name: product.name, price: product.price });
+      }
+    }
+
+    if (similarProducts.length === 0) return null;
+
+    // Calculate price range
+    const prices = similarProducts.map(p => p.price);
+    const minPrice = Math.min(...prices);
+    const maxPrice = Math.max(...prices);
+    const avgPrice = Math.round(prices.reduce((a, b) => a + b, 0) / prices.length);
+
+    let suggestion = `\n💡 <b>Fiyat Önerisi:</b>\n`;
+    suggestion += `Benzer ürünler: ${similarProducts.length} adet\n`;
+    suggestion += `Fiyat aralığı: ${formatCurrency(minPrice)} - ${formatCurrency(maxPrice)}\n`;
+    suggestion += `Ortalama: ${formatCurrency(avgPrice)}\n`;
+
+    if (similarProducts.length <= 3) {
+      suggestion += `\n<i>Örnekler:</i>\n`;
+      for (const p of similarProducts.slice(0, 3)) {
+        suggestion += `• ${p.name}: ${formatCurrency(p.price)}\n`;
+      }
+    }
+
+    return suggestion;
+
+  } catch {
+    return null;
+  }
+}
+
+// ==========================================
+// GÜNLÜK OTOMATİK RAPOR
+// ==========================================
+
+// /raporayarla [saat] - Set daily report time
+async function handleRaporAyarla(chatId: number, args: string[]) {
+  if (args.length === 0) {
+    const current = reportSettings.get(chatId);
+    if (current?.enabled) {
+      await sendMessage(
+        chatId,
+        `⏰ <b>Günlük Rapor Ayarı</b>\n\n` +
+        `Durum: ✅ Aktif\n` +
+        `Saat: ${String(current.hour).padStart(2, "0")}:${String(current.minute).padStart(2, "0")}\n\n` +
+        `<i>Değiştirmek için:</i> /raporayarla [saat]\n` +
+        `Örnek: /raporayarla 21:00\n\n` +
+        `<i>Kapatmak için:</i> /raporayarla kapat`
+      );
+    } else {
+      await sendMessage(
+        chatId,
+        `⏰ <b>Günlük Rapor Ayarı</b>\n\n` +
+        `Durum: ❌ Kapalı\n\n` +
+        `Her gün otomatik günlük rapor almak için:\n` +
+        `/raporayarla [saat]\n\n` +
+        `Örnek: /raporayarla 21:00`
+      );
+    }
+    return;
+  }
+
+  const arg = args[0].toLowerCase();
+
+  if (arg === "kapat" || arg === "iptal" || arg === "off") {
+    reportSettings.delete(chatId);
+    await sendMessage(chatId, "✅ Günlük otomatik rapor kapatıldı.");
+    return;
+  }
+
+  // Parse time (HH:MM or HH)
+  const timeParts = arg.split(":");
+  const hour = parseInt(timeParts[0]);
+  const minute = timeParts.length > 1 ? parseInt(timeParts[1]) : 0;
+
+  if (isNaN(hour) || hour < 0 || hour > 23 || isNaN(minute) || minute < 0 || minute > 59) {
+    await sendMessage(chatId, "❌ Geçersiz saat formatı.\n\nÖrnek: /raporayarla 21:00");
+    return;
+  }
+
+  reportSettings.set(chatId, {
+    chatId,
+    hour,
+    minute,
+    enabled: true,
+  });
+
+  await sendMessage(
+    chatId,
+    `✅ <b>Günlük Rapor Ayarlandı!</b>\n\n` +
+    `⏰ Her gün saat ${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")} civarında günlük rapor gönderilecek.\n\n` +
+    `<i>Not: Sunucu yeniden başlatıldığında ayar sıfırlanır. Kalıcı ayar için veritabanı entegrasyonu gerekir.</i>\n\n` +
+    `<i>Kapatmak için:</i> /raporayarla kapat`
+  );
+}
+
+// Check and send scheduled reports (call this from a cron job or interval)
+export async function checkAndSendScheduledReports() {
+  const now = new Date();
+  const currentHour = now.getHours();
+  const currentMinute = now.getMinutes();
+
+  for (const [chatId, settings] of reportSettings.entries()) {
+    if (settings.enabled && settings.hour === currentHour && Math.abs(settings.minute - currentMinute) <= 2) {
+      try {
+        await sendMessage(chatId, "📊 <b>Günlük Otomatik Rapor</b>\n\n<i>Rapor hazırlanıyor...</i>");
+        await handleGunluk(chatId);
+      } catch (error) {
+        console.error(`Failed to send scheduled report to ${chatId}:`, error);
+      }
+    }
+  }
 }
 
 // /sat [SKU] [beden] [adet] [fiyat] - Record sale
@@ -3147,6 +3585,12 @@ export async function handleUpdate(update: TelegramUpdate) {
     return;
   }
 
+  // Handle voice message
+  if (message.voice) {
+    await handleVoice(chatId, userId, message.voice);
+    return;
+  }
+
   // Check for state-based input
   if (text && !text.startsWith("/")) {
     const handled = await handleTextInput(chatId, userId, text);
@@ -3267,6 +3711,7 @@ export async function handleUpdate(update: TelegramUpdate) {
         }
         break;
       case "/foto":
+      case "/fotografekle":
         await handleFoto(chatId, userId, args);
         break;
       case "/fotograflar":
@@ -3274,6 +3719,12 @@ export async function handleUpdate(update: TelegramUpdate) {
         break;
       case "/seristok":
         await handleSeriStok(chatId, args);
+        break;
+      case "/stokoner":
+        await handleStokOner(chatId);
+        break;
+      case "/raporayarla":
+        await handleRaporAyarla(chatId, args);
         break;
       case "/atla":
         // Skip stock entry if in that state
