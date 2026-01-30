@@ -1,14 +1,22 @@
 import { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import ProductGallery from "@/components/product/ProductGallery";
 import AddToCartButton from "@/components/product/AddToCartButton";
-import ShareButtons from "@/components/share/ShareButtons";
 import FeaturedProducts from "@/components/home/FeaturedProducts";
 import { prisma } from "@/lib/prisma";
 import { formatPrice, slugify } from "@/lib/utils";
 import { WHATSAPP_PHONE, SITE_CONFIG, STORE_INFO } from "@/lib/constants";
 import type { Product } from "@/types";
+
+// Lazy load ShareButtons (heavy component with canvas)
+const ShareButtons = dynamic(() => import("@/components/share/ShareButtons"), {
+  loading: () => <div className="h-32 bg-gray-100 rounded-apple animate-pulse" />,
+});
+
+// ISR: Revalidate every 60 seconds
+export const revalidate = 60;
 
 interface PageProps {
   params: Promise<{ slug: string }>;

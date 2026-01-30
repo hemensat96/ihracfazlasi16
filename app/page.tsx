@@ -1,10 +1,18 @@
+import dynamic from "next/dynamic";
 import Hero from "@/components/home/Hero";
-import PromoVideo from "@/components/home/PromoVideo";
 import Categories from "@/components/home/Categories";
 import FeaturedProducts from "@/components/home/FeaturedProducts";
 import WhatsAppCTA from "@/components/home/WhatsAppCTA";
 import { prisma } from "@/lib/prisma";
 import type { Product } from "@/types";
+
+// Lazy load heavy components
+const PromoVideo = dynamic(() => import("@/components/home/PromoVideo"), {
+  loading: () => <div className="h-[60vh] min-h-[400px] max-h-[600px] bg-gray-900 animate-pulse" />,
+});
+
+// ISR: Revalidate every 60 seconds
+export const revalidate = 60;
 
 async function getFeaturedProducts(): Promise<Product[]> {
   try {

@@ -3,9 +3,8 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
-import WhatsAppWidget from "@/components/WhatsAppWidget";
-import StickyCartBar from "@/components/StickyCartBar";
 import Providers from "@/components/Providers";
+import ClientWidgets from "@/components/ClientWidgets";
 import { SITE_CONFIG, STORE_INFO, BRANDS } from "@/lib/constants";
 
 const inter = Inter({
@@ -134,8 +133,7 @@ export default function RootLayout({
           <Header />
           <main className="flex-1">{children}</main>
           <Footer />
-          <WhatsAppWidget />
-          <StickyCartBar />
+          <ClientWidgets />
         </Providers>
       </body>
     </html>

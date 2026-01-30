@@ -6,6 +6,9 @@ import { prisma } from "@/lib/prisma";
 import { SITE_CONFIG, BRANDS } from "@/lib/constants";
 import type { Product, Category } from "@/types";
 
+// ISR: Revalidate every 60 seconds
+export const revalidate = 60;
+
 export const metadata: Metadata = {
   title: "Ürünler | Dünya Markaları Erkek Giyim",
   description: `İhraç fazlası orijinal erkek giyim ürünleri. ${BRANDS.slice(0, 5).join(", ")} ve daha fazlası. Bursa İnegöl'de uygun fiyatlarla.`,
