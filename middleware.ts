@@ -3,32 +3,32 @@ import type { NextRequest } from "next/server";
 
 export function middleware(request: NextRequest) {
   const url = request.nextUrl;
-  const { pathname, search } = url;
+  const { pathname } = url;
+
+  // Tam URL'yi al (query string dahil)
+  const fullUrl = request.url;
 
   // Eski URL formatlarini yakala ve 301 redirect yap
   // Format: /?product/123456789 -> /urunler
-  if (pathname === "/" && search) {
-    // ?product/ID formatini kontrol et
-    const productMatch = search.match(/^\?product\/(\d+)/);
-    if (productMatch) {
-      // Eski product ID'si var, urunler sayfasina yonlendir
-      // Not: Eski ID'den yeni slug'a esleme icin veritabani sorgusu gerekir
-      // Su an icin genel urunler sayfasina yonlendiriyoruz
-      return NextResponse.redirect(
-        new URL("/urunler", request.url),
-        { status: 301 }
-      );
-    }
+  // veya: ?product/123456789 (query string olarak)
 
-    // ?category/slug formatini kontrol et
-    const categoryMatch = search.match(/^\?category\/([a-z0-9-]+)/i);
-    if (categoryMatch) {
-      const slug = categoryMatch[1].toLowerCase();
-      return NextResponse.redirect(
-        new URL(`/kategori/${slug}`, request.url),
-        { status: 301 }
-      );
-    }
+  // ?product/ID formatini kontrol et (URL'nin herhangi bir yerinde)
+  const productMatch = fullUrl.match(/\?product\/(\d+)/);
+  if (productMatch) {
+    return NextResponse.redirect(
+      new URL("/urunler", request.url),
+      { status: 301 }
+    );
+  }
+
+  // ?category/slug formatini kontrol et
+  const categoryMatch = fullUrl.match(/\?category\/([a-z0-9-]+)/i);
+  if (categoryMatch) {
+    const slug = categoryMatch[1].toLowerCase();
+    return NextResponse.redirect(
+      new URL(`/kategori/${slug}`, request.url),
+      { status: 301 }
+    );
   }
 
   // www olmayan URL'leri www'ye yonlendir (veya tersi - tercihe gore)
