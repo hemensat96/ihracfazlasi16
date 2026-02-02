@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 
 export function middleware(request: NextRequest) {
   const url = request.nextUrl;
-  const { pathname } = url;
+  const { pathname, search } = url;
 
   // Tam URL'yi al (query string dahil)
   const fullUrl = request.url;
