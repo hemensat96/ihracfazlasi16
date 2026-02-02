@@ -8,9 +8,22 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: "*",
         allow: "/",
-        disallow: ["/api/", "/sepet", "/admin/"],
+        disallow: [
+          "/api/",
+          "/sepet",
+          "/sepet/",
+          "/admin/",
+          "/favoriler",
+          "/favoriler/",
+          // Filtreli ve parametre iceren sayfalar
+          "/urunler?*",
+          // Eski URL formatlari (redirect edilecek ama indexlenmemeli)
+          "/*?product*",
+          "/*?category*",
+        ],
       },
     ],
     sitemap: `${SITE_URL}/sitemap.xml`,
+    host: SITE_URL,
   };
 }

@@ -9,26 +9,8 @@ import type { Product, Category } from "@/types";
 // ISR: Revalidate every 60 seconds
 export const revalidate = 60;
 
-export const metadata: Metadata = {
-  title: "Ürünler | Dünya Markaları Erkek Giyim",
-  description: `İhraç fazlası orijinal erkek giyim ürünleri. ${BRANDS.slice(0, 5).join(", ")} ve daha fazlası. Bursa İnegöl'de uygun fiyatlarla.`,
-  keywords: [
-    "ihraç fazlası ürünler",
-    "erkek giyim",
-    "dünya markaları",
-    ...BRANDS,
-    "Bursa",
-    "İnegöl",
-  ],
-  alternates: {
-    canonical: `${SITE_CONFIG.url}/urunler`,
-  },
-  openGraph: {
-    title: "Ürünler | İhraç Fazlası Giyim",
-    description: "Dünya markalarından ihraç fazlası erkek giyim ürünleri",
-    url: `${SITE_CONFIG.url}/urunler`,
-  },
-};
+// Dinamik metadata için generateMetadata kullanılacak
+// Pagination sayfalarında doğru canonical tag için
 
 interface PageProps {
   searchParams: Promise<{
@@ -38,6 +20,43 @@ interface PageProps {
     arama?: string;
     sayfa?: string;
   }>;
+}
+
+// Dinamik metadata - pagination için doğru canonical
+export async function generateMetadata({ searchParams }: PageProps): Promise<Metadata> {
+  const params = await searchParams;
+  const page = parseInt(params.sayfa || "1");
+  const hasFilters = params.kategori || params.beden || params.siralama || params.arama;
+
+  // Sayfa 1 ve filtre yoksa ana URL, değilse query string ile
+  const canonicalUrl = page === 1 && !hasFilters
+    ? `${SITE_CONFIG.url}/urunler`
+    : `${SITE_CONFIG.url}/urunler${page > 1 ? `?sayfa=${page}` : ''}`;
+
+  const titleSuffix = page > 1 ? ` - Sayfa ${page}` : '';
+
+  return {
+    title: `Ürünler${titleSuffix} | Dünya Markaları Erkek Giyim`,
+    description: `İhraç fazlası orijinal erkek giyim ürünleri. ${BRANDS.slice(0, 5).join(", ")} ve daha fazlası. Bursa İnegöl'de uygun fiyatlarla.`,
+    keywords: [
+      "ihraç fazlası ürünler",
+      "erkek giyim",
+      "dünya markaları",
+      ...BRANDS,
+      "Bursa",
+      "İnegöl",
+    ],
+    alternates: {
+      canonical: canonicalUrl,
+    },
+    openGraph: {
+      title: `Ürünler${titleSuffix} | İhraç Fazlası Giyim`,
+      description: "Dünya markalarından ihraç fazlası erkek giyim ürünleri",
+      url: canonicalUrl,
+    },
+    // Filtreli sayfaları indexleme (duplicate content önleme)
+    robots: hasFilters ? { index: false, follow: true } : { index: true, follow: true },
+  };
 }
 
 async function getCategories(): Promise<Category[]> {

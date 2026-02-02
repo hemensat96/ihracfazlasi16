@@ -19,6 +19,46 @@ const nextConfig: NextConfig = {
     ],
   },
   serverExternalPackages: ["@libsql/client", "@prisma/adapter-libsql"],
+
+  // 301 Yönlendirmeler - Eski URL'lerden yeni URL'lere
+  async redirects() {
+    return [
+      // Eski ?product/ID formatından yeni /urunler formatına
+      // Not: Query string redirect'leri için middleware kullanılmalı
+      // Burası path-based redirect'ler için
+      {
+        source: "/product/:id",
+        destination: "/urunler",
+        permanent: true, // 301 redirect
+      },
+      {
+        source: "/products/:path*",
+        destination: "/urunler/:path*",
+        permanent: true,
+      },
+      {
+        source: "/category/:slug",
+        destination: "/kategori/:slug",
+        permanent: true,
+      },
+      {
+        source: "/categories/:slug",
+        destination: "/kategori/:slug",
+        permanent: true,
+      },
+      {
+        source: "/about",
+        destination: "/hakkimizda",
+        permanent: true,
+      },
+      {
+        source: "/faq",
+        destination: "/sss",
+        permanent: true,
+      },
+    ];
+  },
+
   webpack: (config) => {
     config.module.rules.push({
       test: /\.md$/,
