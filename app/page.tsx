@@ -1,7 +1,9 @@
 import dynamic from "next/dynamic";
 import Hero from "@/components/home/Hero";
+import BrandMarquee from "@/components/home/BrandMarquee";
 import Categories from "@/components/home/Categories";
 import FeaturedProducts from "@/components/home/FeaturedProducts";
+import TrustBadges from "@/components/home/TrustBadges";
 import WhatsAppCTA from "@/components/home/WhatsAppCTA";
 import { prisma } from "@/lib/prisma";
 import type { Product } from "@/types";
@@ -9,6 +11,10 @@ import type { Product } from "@/types";
 // Lazy load heavy components
 const PromoVideo = dynamic(() => import("@/components/home/PromoVideo"), {
   loading: () => <div className="h-[60vh] min-h-[400px] max-h-[600px] bg-gray-900 animate-pulse" />,
+});
+
+const Testimonials = dynamic(() => import("@/components/home/Testimonials"), {
+  loading: () => <div className="h-96 bg-gray-100 animate-pulse" />,
 });
 
 // ISR: Revalidate every 60 seconds
@@ -50,6 +56,8 @@ export default async function HomePage() {
   return (
     <>
       <Hero />
+      <BrandMarquee />
+      <TrustBadges />
       <Categories />
       <FeaturedProducts
         products={featuredProducts}
@@ -57,6 +65,7 @@ export default async function HomePage() {
         subtitle="En son eklenen ürünlerimizi keşfedin"
       />
       <PromoVideo />
+      <Testimonials />
       <WhatsAppCTA />
     </>
   );

@@ -36,9 +36,8 @@ export default function Header() {
   return (
     <>
       <header
-        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-apple ease-apple ${
-          isScrolled ? "glass shadow-apple" : "bg-white/0"
-        }`}
+        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-apple ease-apple ${isScrolled ? "glass shadow-apple" : "bg-white/0"
+          }`}
       >
         <nav className="container-wide">
           <div className="flex items-center justify-between h-16 md:h-20">
@@ -66,11 +65,10 @@ export default function Header() {
                 <Link
                   key={link.href}
                   href={link.href}
-                  className={`text-body transition-colors duration-200 ${
-                    pathname === link.href
+                  className={`text-body transition-colors duration-200 ${pathname === link.href
                       ? "text-foreground dark:text-white font-medium"
                       : "text-gray-500 hover:text-foreground dark:hover:text-white"
-                  }`}
+                    }`}
                 >
                   {link.label}
                 </Link>
@@ -205,7 +203,7 @@ export default function Header() {
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="fixed top-0 right-0 bottom-0 w-72 z-50 bg-white shadow-xl md:hidden"
+            className="fixed top-0 right-0 bottom-0 w-72 z-50 bg-white dark:bg-[#161616] shadow-xl md:hidden"
           >
             <div className="flex flex-col h-full">
               <div className="flex items-center justify-between p-6 border-b border-gray-100">
@@ -233,11 +231,10 @@ export default function Header() {
                     <Link
                       key={link.href}
                       href={link.href}
-                      className={`py-3 px-4 rounded-apple-sm transition-colors ${
-                        pathname === link.href
+                      className={`py-3 px-4 rounded-apple-sm transition-colors ${pathname === link.href
                           ? "bg-gray-100 text-foreground font-medium"
                           : "text-gray-500 hover:bg-gray-50 hover:text-foreground"
-                      }`}
+                        }`}
                     >
                       {link.label}
                     </Link>
