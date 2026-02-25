@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { animate, stagger } from "animejs";
+import { useIsMobile } from "@/hooks/useIsMobile";
 
 const categories = [
   {
@@ -42,6 +43,7 @@ export default function Categories() {
   const sectionRef = useRef<HTMLElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
+  const isMobile = useIsMobile();
 
   // Header animation on scroll
   useEffect(() => {
@@ -54,7 +56,7 @@ export default function Categories() {
     [badge, title, subtitle].forEach((el) => {
       if (el) {
         (el as HTMLElement).style.opacity = "0";
-        (el as HTMLElement).style.transform = "translateY(30px)";
+        (el as HTMLElement).style.transform = "translateY(20px)";
       }
     });
 
@@ -64,21 +66,21 @@ export default function Categories() {
           if (entry.isIntersecting) {
             animate([badge, title, subtitle].filter(Boolean), {
               opacity: [0, 1],
-              translateY: [30, 0],
-              duration: 1000,
-              delay: stagger(150),
+              translateY: [20, 0],
+              duration: isMobile ? 600 : 1000,
+              delay: stagger(isMobile ? 80 : 150),
               ease: "outExpo",
             });
             observer.disconnect();
           }
         });
       },
-      { threshold: 0.2 }
+      { threshold: 0.15 }
     );
 
     observer.observe(headerRef.current);
     return () => observer.disconnect();
-  }, []);
+  }, [isMobile]);
 
   // Cards animation with stagger
   useEffect(() => {
@@ -87,7 +89,7 @@ export default function Categories() {
     const cards = gridRef.current.querySelectorAll(".category-card");
     cards.forEach((card) => {
       (card as HTMLElement).style.opacity = "0";
-      (card as HTMLElement).style.transform = "translateY(60px) scale(0.95)";
+      (card as HTMLElement).style.transform = `translateY(${isMobile ? 30 : 60}px)`;
     });
 
     const observer = new IntersectionObserver(
@@ -96,26 +98,25 @@ export default function Categories() {
           if (entry.isIntersecting) {
             animate(cards, {
               opacity: [0, 1],
-              translateY: [60, 0],
-              scale: [0.95, 1],
-              duration: 1200,
-              delay: stagger(200),
+              translateY: [isMobile ? 30 : 60, 0],
+              duration: isMobile ? 700 : 1200,
+              delay: stagger(isMobile ? 120 : 200),
               ease: "outExpo",
             });
             observer.disconnect();
           }
         });
       },
-      { threshold: 0.1 }
+      { threshold: 0.05 }
     );
 
     observer.observe(gridRef.current);
     return () => observer.disconnect();
-  }, []);
+  }, [isMobile]);
 
-  // Parallax effect on category images
+  // Parallax effect on category images - DESKTOP ONLY
   useEffect(() => {
-    if (!gridRef.current) return;
+    if (isMobile || !gridRef.current) return;
 
     let ticking = false;
 
@@ -147,33 +148,33 @@ export default function Categories() {
     handleScroll();
 
     return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
+  }, [isMobile]);
 
   return (
-    <section ref={sectionRef} className="section bg-white dark:bg-[#0a0a0a] relative overflow-hidden">
+    <section ref={sectionRef} className="py-12 sm:py-16 md:py-20 bg-white dark:bg-[#0a0a0a] relative overflow-hidden">
       {/* Background decorative elements */}
-      <div className="absolute inset-0 pointer-events-none">
+      <div className="absolute inset-0 pointer-events-none hidden md:block">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-accent/3 rounded-full blur-[150px]" />
       </div>
 
-      <div className="container-wide relative z-10">
+      <div className="container-wide relative z-10 px-4 sm:px-6">
         {/* Header */}
-        <div ref={headerRef} className="text-center mb-16">
-          <div className="cat-badge inline-flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-white/5 rounded-full mb-6">
-            <span className="text-sm text-gray-500 dark:text-gray-400 font-medium">Koleksiyonları Keşfet</span>
+        <div ref={headerRef} className="text-center mb-8 sm:mb-12 md:mb-16">
+          <div className="cat-badge inline-flex items-center gap-2 px-3 py-1.5 sm:px-4 sm:py-2 bg-gray-100 dark:bg-white/5 rounded-full mb-4 sm:mb-6">
+            <span className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 font-medium">Koleksiyonları Keşfet</span>
           </div>
-          <h2 className="cat-title text-display text-foreground dark:text-white mb-4">
+          <h2 className="cat-title text-2xl sm:text-3xl md:text-4xl lg:text-display font-semibold text-foreground dark:text-white mb-2 sm:mb-4">
             Kategoriler
           </h2>
-          <p className="cat-subtitle text-body-large text-gray-500">
+          <p className="cat-subtitle text-sm sm:text-base md:text-body-large text-gray-500">
             Aradığınız tarzı bulun
           </p>
         </div>
 
-        {/* Category Grid with parallax images */}
-        <div ref={gridRef} className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Category Grid */}
+        <div ref={gridRef} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
           {categories.map((category) => (
-            <CategoryCard key={category.slug} category={category} />
+            <CategoryCard key={category.slug} category={category} isMobile={isMobile} />
           ))}
         </div>
       </div>
@@ -192,11 +193,13 @@ interface CategoryType {
   accent: string;
 }
 
-function CategoryCard({ category }: { category: CategoryType }) {
+function CategoryCard({ category, isMobile }: { category: CategoryType; isMobile: boolean }) {
   const cardRef = useRef<HTMLAnchorElement>(null);
 
-  // Card hover tilt effect
+  // Card hover tilt effect - DESKTOP ONLY
   useEffect(() => {
+    if (isMobile) return;
+
     const card = cardRef.current;
     if (!card) return;
 
@@ -212,7 +215,6 @@ function CategoryCard({ category }: { category: CategoryType }) {
         ease: "outQuad",
       });
 
-      // Move glow with cursor
       const glow = card.querySelector(".card-glow") as HTMLElement;
       if (glow) {
         glow.style.left = `${e.clientX - rect.left}px`;
@@ -242,14 +244,14 @@ function CategoryCard({ category }: { category: CategoryType }) {
       card.removeEventListener("mousemove", handleMouseMove);
       card.removeEventListener("mouseleave", handleMouseLeave);
     };
-  }, []);
+  }, [isMobile]);
 
   return (
     <Link
       ref={cardRef}
       href={category.href}
-      className="category-card group block relative h-[420px] md:h-[480px] rounded-apple overflow-hidden will-change-transform"
-      style={{ perspective: "1000px", transformStyle: "preserve-3d" }}
+      className="category-card group block relative h-[300px] sm:h-[360px] md:h-[420px] lg:h-[480px] rounded-2xl sm:rounded-apple overflow-hidden"
+      style={!isMobile ? { perspective: "1000px", transformStyle: "preserve-3d" } : undefined}
     >
       {/* Image with parallax */}
       <div className="absolute inset-0 overflow-hidden">
@@ -257,8 +259,8 @@ function CategoryCard({ category }: { category: CategoryType }) {
           src={category.image}
           alt={category.name}
           fill
-          sizes="(max-width: 768px) 100vw, 33vw"
-          className="cat-img object-cover transition-transform duration-700 ease-out will-change-transform"
+          sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, 33vw"
+          className="cat-img object-cover transition-transform duration-700 ease-out"
           style={{ transform: "scale(1.1)" }}
         />
       </div>
@@ -267,49 +269,51 @@ function CategoryCard({ category }: { category: CategoryType }) {
       <div className={`absolute inset-0 bg-gradient-to-t ${category.gradient}`} />
       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
 
-      {/* Hover glow */}
-      <div
-        className="card-glow absolute w-40 h-40 bg-white/20 rounded-full blur-[60px] -translate-x-1/2 -translate-y-1/2 pointer-events-none transition-opacity duration-300"
-        style={{ opacity: 0 }}
-      />
+      {/* Hover glow - DESKTOP ONLY */}
+      {!isMobile && (
+        <div
+          className="card-glow absolute w-40 h-40 bg-white/20 rounded-full blur-[60px] -translate-x-1/2 -translate-y-1/2 pointer-events-none transition-opacity duration-300"
+          style={{ opacity: 0 }}
+        />
+      )}
 
       {/* Hover overlay */}
       <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-500" />
 
       {/* Category badge */}
-      <div className="absolute top-6 left-6">
+      <div className="absolute top-4 left-4 sm:top-6 sm:left-6">
         <div className={`w-2 h-2 ${category.accent} rounded-full`} />
       </div>
 
       {/* Content */}
-      <div className="absolute bottom-0 left-0 right-0 p-8 text-white">
-        <div className="transform transition-transform duration-500 group-hover:translate-y-[-8px]">
+      <div className="absolute bottom-0 left-0 right-0 p-5 sm:p-6 md:p-8 text-white">
+        <div className="transform transition-transform duration-500 group-hover:translate-y-[-4px] sm:group-hover:translate-y-[-8px]">
           {/* Brand tags */}
-          <div className="flex flex-wrap gap-1.5 mb-4">
-            {category.brands.map((brand) => (
+          <div className="flex flex-wrap gap-1 sm:gap-1.5 mb-3 sm:mb-4">
+            {category.brands.slice(0, isMobile ? 3 : 4).map((brand) => (
               <span
                 key={brand}
-                className="px-2.5 py-1 text-[11px] font-semibold tracking-wide uppercase bg-white/15 backdrop-blur-sm rounded-full border border-white/10 text-white/90"
+                className="px-2 py-0.5 sm:px-2.5 sm:py-1 text-[10px] sm:text-[11px] font-semibold tracking-wide uppercase bg-white/15 backdrop-blur-sm rounded-full border border-white/10 text-white/90"
               >
                 {brand}
               </span>
             ))}
           </div>
 
-          <h3 className="text-2xl md:text-3xl font-semibold mb-2 tracking-tight">{category.name}</h3>
-          <p className="text-base text-white/70 mb-5">{category.description}</p>
+          <h3 className="text-xl sm:text-2xl md:text-3xl font-semibold mb-1 sm:mb-2 tracking-tight">{category.name}</h3>
+          <p className="text-sm sm:text-base text-white/70 mb-3 sm:mb-5">{category.description}</p>
 
           {/* Arrow button */}
-          <div className="inline-flex items-center gap-3 text-white/80 group-hover:text-white transition-colors">
-            <span className="text-sm font-medium tracking-wide uppercase">Keşfet</span>
-            <div className="w-8 h-8 rounded-full border border-white/30 group-hover:border-white/60 group-hover:bg-white/10 flex items-center justify-center transition-all duration-300">
+          <div className="inline-flex items-center gap-2 sm:gap-3 text-white/80 group-hover:text-white transition-colors">
+            <span className="text-xs sm:text-sm font-medium tracking-wide uppercase">Keşfet</span>
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full border border-white/30 group-hover:border-white/60 group-hover:bg-white/10 flex items-center justify-center transition-all duration-300">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 fill="none"
                 viewBox="0 0 24 24"
                 strokeWidth={2}
                 stroke="currentColor"
-                className="w-4 h-4 transition-transform group-hover:translate-x-0.5"
+                className="w-3.5 h-3.5 sm:w-4 sm:h-4 transition-transform group-hover:translate-x-0.5"
               >
                 <path
                   strokeLinecap="round"
