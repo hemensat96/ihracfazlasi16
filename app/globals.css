@@ -173,4 +173,81 @@
   .glass {
     @apply bg-white/80 dark:bg-gray-900/80 backdrop-blur-lg;
   }
+
+  /* Parallax performance optimizations */
+  .will-change-transform {
+    will-change: transform;
+  }
+
+  .will-change-opacity {
+    will-change: opacity;
+  }
+
+  /* GPU acceleration for parallax layers */
+  .parallax-layer {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+  }
+
+  /* Smooth transitions for scroll-linked animations */
+  .parallax-smooth {
+    transition: transform 0.1s linear;
+  }
+
+  /* 3D perspective container for card tilt effects */
+  .perspective-container {
+    perspective: 1000px;
+    transform-style: preserve-3d;
+  }
+
+  /* Magnetic hover base */
+  .magnetic-hover {
+    transition: transform 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
+  }
+
+  /* Premium text shimmer */
+  @keyframes textShimmer {
+    0% {
+      background-position: -200% center;
+    }
+    100% {
+      background-position: 200% center;
+    }
+  }
+
+  .text-shimmer {
+    background-size: 200% auto;
+    animation: textShimmer 4s ease-in-out infinite;
+  }
+
+  /* Floating animation for decorative elements */
+  @keyframes float {
+    0%, 100% {
+      transform: translateY(0) rotate(0deg);
+    }
+    33% {
+      transform: translateY(-8px) rotate(1deg);
+    }
+    66% {
+      transform: translateY(4px) rotate(-1deg);
+    }
+  }
+
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+
+  /* Glow pulse for CTAs */
+  @keyframes glowPulse {
+    0%, 100% {
+      box-shadow: 0 0 20px rgba(0, 113, 227, 0.2);
+    }
+    50% {
+      box-shadow: 0 0 40px rgba(0, 113, 227, 0.4);
+    }
+  }
+
+  .glow-pulse {
+    animation: glowPulse 3s ease-in-out infinite;
+  }
 }

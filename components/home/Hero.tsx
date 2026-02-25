@@ -1,176 +1,419 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { animate, stagger, createTimeline } from "animejs";
 
 export default function Hero() {
+  const heroRef = useRef<HTMLElement>(null);
+  const particlesRef = useRef<HTMLDivElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const badgeRef = useRef<HTMLDivElement>(null);
+  const brandsRef = useRef<HTMLDivElement>(null);
+  const subtitleRef = useRef<HTMLParagraphElement>(null);
+  const ctaRef = useRef<HTMLDivElement>(null);
+  const statsRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [mounted, setMounted] = useState(false);
+
+  // Parallax scroll effect
+  useEffect(() => {
+    const hero = heroRef.current;
+    if (!hero) return;
+
+    let ticking = false;
+
+    const handleScroll = () => {
+      if (!ticking) {
+        requestAnimationFrame(() => {
+          const scrollY = window.scrollY;
+          const heroHeight = hero.offsetHeight;
+
+          if (scrollY < heroHeight) {
+            const progress = scrollY / heroHeight;
+
+            // Parallax layers
+            const video = hero.querySelector(".hero-video") as HTMLElement;
+            const overlay = hero.querySelector(".hero-overlay") as HTMLElement;
+            const content = hero.querySelector(".hero-content") as HTMLElement;
+
+            if (video) video.style.transform = `translateY(${scrollY * 0.4}px) scale(${1 + progress * 0.1})`;
+            if (overlay) overlay.style.opacity = String(0.4 + progress * 0.4);
+            if (content) {
+              content.style.transform = `translateY(${scrollY * -0.2}px)`;
+              content.style.opacity = String(1 - progress * 1.5);
+            }
+          }
+
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  // Initial entrance animations
+  useEffect(() => {
+    setMounted(true);
+
+    const tl = createTimeline({
+      defaults: {
+        ease: "outExpo",
+        duration: 1200,
+      },
+    });
+
+    // Badge slides in
+    if (badgeRef.current) {
+      badgeRef.current.style.opacity = "0";
+      badgeRef.current.style.transform = "translateY(20px) scale(0.9)";
+      tl.add(badgeRef.current, {
+        opacity: [0, 1],
+        translateY: [20, 0],
+        scale: [0.9, 1],
+        duration: 800,
+      }, 300);
+    }
+
+    // Title reveals word by word
+    if (titleRef.current) {
+      const words = titleRef.current.querySelectorAll(".hero-word");
+      words.forEach((w) => {
+        (w as HTMLElement).style.opacity = "0";
+        (w as HTMLElement).style.transform = "translateY(60px)";
+      });
+      tl.add(words, {
+        opacity: [0, 1],
+        translateY: [60, 0],
+        duration: 1000,
+        delay: stagger(120),
+      }, 500);
+    }
+
+    // Brands cascade in
+    if (brandsRef.current) {
+      const brandEls = brandsRef.current.querySelectorAll(".hero-brand");
+      brandEls.forEach((b) => {
+        (b as HTMLElement).style.opacity = "0";
+        (b as HTMLElement).style.transform = "translateX(-20px)";
+      });
+      tl.add(brandEls, {
+        opacity: [0, 1],
+        translateX: [-20, 0],
+        duration: 600,
+        delay: stagger(60, { from: "center" }),
+      }, 1200);
+    }
+
+    // Subtitle fades in
+    if (subtitleRef.current) {
+      subtitleRef.current.style.opacity = "0";
+      subtitleRef.current.style.transform = "translateY(15px)";
+      tl.add(subtitleRef.current, {
+        opacity: [0, 1],
+        translateY: [15, 0],
+        duration: 800,
+      }, 1600);
+    }
+
+    // CTA buttons scale in
+    if (ctaRef.current) {
+      const buttons = ctaRef.current.querySelectorAll(".hero-btn");
+      buttons.forEach((b) => {
+        (b as HTMLElement).style.opacity = "0";
+        (b as HTMLElement).style.transform = "translateY(30px) scale(0.9)";
+      });
+      tl.add(buttons, {
+        opacity: [0, 1],
+        translateY: [30, 0],
+        scale: [0.9, 1],
+        duration: 800,
+        delay: stagger(150),
+      }, 1800);
+    }
+
+    // Stats count up
+    if (statsRef.current) {
+      const statItems = statsRef.current.querySelectorAll(".hero-stat");
+      statItems.forEach((s) => {
+        (s as HTMLElement).style.opacity = "0";
+        (s as HTMLElement).style.transform = "translateY(40px)";
+      });
+      tl.add(statItems, {
+        opacity: [0, 1],
+        translateY: [40, 0],
+        duration: 800,
+        delay: stagger(100),
+      }, 2000);
+    }
+
+    // Scroll indicator
+    if (scrollRef.current) {
+      scrollRef.current.style.opacity = "0";
+      tl.add(scrollRef.current, {
+        opacity: [0, 1],
+        duration: 600,
+      }, 2500);
+    }
+
+    // Start floating particles
+    if (particlesRef.current) {
+      const particles = particlesRef.current.querySelectorAll(".particle");
+      animate(particles, {
+        translateY: () => [-20, 20],
+        translateX: () => [-15, 15],
+        opacity: [0.2, 0.6, 0.2],
+        scale: [0.8, 1.2, 0.8],
+        duration: () => 3000 + Math.random() * 4000,
+        delay: stagger(200),
+        loop: true,
+        alternate: true,
+        ease: "inOutSine",
+      });
+    }
+  }, []);
+
+  // Magnetic effect for CTA buttons
+  useEffect(() => {
+    if (!ctaRef.current) return;
+
+    const buttons = ctaRef.current.querySelectorAll(".hero-btn");
+
+    const handleMouseMove = (e: Event) => {
+      const mouseEvent = e as MouseEvent;
+      const btn = mouseEvent.currentTarget as HTMLElement;
+      const rect = btn.getBoundingClientRect();
+      const x = mouseEvent.clientX - rect.left - rect.width / 2;
+      const y = mouseEvent.clientY - rect.top - rect.height / 2;
+
+      animate(btn, {
+        translateX: x * 0.2,
+        translateY: y * 0.2,
+        duration: 300,
+        ease: "outQuad",
+      });
+    };
+
+    const handleMouseLeave = (e: Event) => {
+      const btn = e.currentTarget as HTMLElement;
+      animate(btn, {
+        translateX: 0,
+        translateY: 0,
+        duration: 600,
+        ease: "outElastic(1, 0.4)",
+      });
+    };
+
+    buttons.forEach((btn) => {
+      btn.addEventListener("mousemove", handleMouseMove);
+      btn.addEventListener("mouseleave", handleMouseLeave);
+    });
+
+    return () => {
+      buttons.forEach((btn) => {
+        btn.removeEventListener("mousemove", handleMouseMove);
+        btn.removeEventListener("mouseleave", handleMouseLeave);
+      });
+    };
+  }, []);
+
+  // Shimmer loop on badge
+  useEffect(() => {
+    if (!badgeRef.current) return;
+
+    const shimmer = badgeRef.current.querySelector(".badge-shimmer") as HTMLElement;
+    if (!shimmer) return;
+
+    const runShimmer = () => {
+      animate(shimmer, {
+        translateX: ["-200%", "200%"],
+        duration: 1500,
+        ease: "linear",
+        onComplete: () => {
+          setTimeout(runShimmer, 3000);
+        },
+      });
+    };
+
+    setTimeout(runShimmer, 2000);
+  }, []);
+
   return (
-    <section className="relative h-screen overflow-hidden">
+    <section ref={heroRef} className="relative h-screen overflow-hidden">
       {/* Mobil için statik arka plan */}
       <div className="absolute inset-0 bg-gradient-to-b from-gray-900 via-gray-800 to-gray-700 md:hidden" />
 
-      {/* Desktop için video */}
+      {/* Desktop için video - parallax layer */}
       <video
         autoPlay
         muted
         loop
         playsInline
         preload="metadata"
-        className="absolute inset-0 w-full h-full object-cover hidden md:block"
+        className="hero-video absolute inset-0 w-full h-full object-cover hidden md:block will-change-transform"
       >
         <source src="/hero-video.webm" type="video/webm" />
       </video>
 
-      {/* Dark Overlay with gradient */}
-      <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-black/70" />
+      {/* Dark Overlay with parallax opacity change */}
+      <div className="hero-overlay absolute inset-0 bg-gradient-to-b from-black/50 via-black/40 to-black/70 transition-opacity" />
 
-      {/* Animated grain/noise overlay for premium feel */}
+      {/* Floating Particles */}
+      <div ref={particlesRef} className="absolute inset-0 overflow-hidden pointer-events-none">
+        {mounted && [...Array(20)].map((_, i) => (
+          <div
+            key={i}
+            className="particle absolute w-1 h-1 bg-white/20 rounded-full"
+            style={{
+              left: `${Math.random() * 100}%`,
+              top: `${Math.random() * 100}%`,
+              width: `${2 + Math.random() * 4}px`,
+              height: `${2 + Math.random() * 4}px`,
+            }}
+          />
+        ))}
+      </div>
+
+      {/* Animated grain/noise overlay */}
       <div className="absolute inset-0 opacity-[0.03] bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iMzAwIj48ZmlsdGVyIGlkPSJhIiB4PSIwIiB5PSIwIj48ZmVUdXJidWxlbmNlIGJhc2VGcmVxdWVuY3k9Ii43NSIgc3RpdGNoVGlsZXM9InN0aXRjaCIgdHlwZT0iZnJhY3RhbE5vaXNlIi8+PC9maWx0ZXI+PHJlY3Qgd2lkdGg9IjMwMCIgaGVpZ2h0PSIzMDAiIGZpbHRlcj0idXJsKCNhKSIgb3BhY2l0eT0iMSIvPjwvc3ZnPg==')]" />
 
-      {/* Content */}
-      <div className="relative z-10 h-full flex flex-col items-center justify-center text-center px-4">
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, ease: [0.25, 0.1, 0.25, 1] }}
-          className="max-w-4xl"
-        >
+      {/* Gradient Lines - Decorative */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute left-1/4 top-0 w-px h-full bg-gradient-to-b from-transparent via-white/10 to-transparent" />
+        <div className="absolute left-2/4 top-0 w-px h-full bg-gradient-to-b from-transparent via-white/5 to-transparent" />
+        <div className="absolute left-3/4 top-0 w-px h-full bg-gradient-to-b from-transparent via-white/10 to-transparent" />
+      </div>
+
+      {/* Content with parallax */}
+      <div className="hero-content relative z-10 h-full flex flex-col items-center justify-center text-center px-4 will-change-transform">
+        <div className="max-w-5xl">
           {/* Badge with shimmer */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.2, duration: 0.5 }}
+          <div
+            ref={badgeRef}
             className="relative inline-flex items-center gap-2 px-5 py-2.5 bg-white/10 backdrop-blur-md rounded-full border border-white/20 mb-8 overflow-hidden"
           >
-            {/* Shimmer effect */}
-            <motion.div
-              className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -skew-x-12"
-              animate={{ x: ["-200%", "200%"] }}
-              transition={{ repeat: Infinity, duration: 3, ease: "linear", repeatDelay: 2 }}
-            />
+            <div className="badge-shimmer absolute inset-0 bg-gradient-to-r from-transparent via-white/15 to-transparent -skew-x-12" style={{ transform: "translateX(-200%)" }} />
             <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
             <span className="text-sm text-white/90 font-medium">Bursa İnegöl&apos;den Türkiye&apos;ye</span>
-          </motion.div>
+          </div>
 
-          {/* Başlık */}
-          <motion.h1
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3, duration: 0.7 }}
-            className="text-4xl sm:text-5xl md:text-7xl lg:text-8xl font-semibold text-white tracking-tight mb-6"
+          {/* Title - word by word reveal */}
+          <h1
+            ref={titleRef}
+            className="text-4xl sm:text-5xl md:text-7xl lg:text-8xl font-semibold text-white tracking-tight mb-6 overflow-hidden"
           >
-            Dünya Markalarında
+            <span className="hero-word inline-block">Dünya&nbsp;</span>
+            <span className="hero-word inline-block">Markalarında</span>
             <br />
-            <span className="bg-gradient-to-r from-white via-blue-100 to-white bg-clip-text text-transparent">
-              Erkek Giyim
+            <span className="hero-word inline-block bg-gradient-to-r from-white via-blue-200 to-white bg-clip-text text-transparent">
+              Erkek&nbsp;
             </span>
-          </motion.h1>
+            <span className="hero-word inline-block bg-gradient-to-r from-blue-200 via-white to-blue-200 bg-clip-text text-transparent">
+              Giyim
+            </span>
+          </h1>
 
-          {/* Markalar with stagger */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.5, duration: 0.6 }}
-            className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 mb-4"
-          >
+          {/* Brands with stagger from center */}
+          <div ref={brandsRef} className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 mb-4">
             {["Prada", "Lacoste", "Tommy Hilfiger", "Hugo Boss", "Armani", "Calvin Klein"].map((brand, i) => (
-              <motion.span
+              <span
                 key={brand}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.6 + i * 0.08 }}
-                className="text-lg md:text-xl text-white/80 font-light"
+                className="hero-brand text-lg md:text-xl text-white/80 font-light"
               >
                 {brand}
                 {i < 5 && <span className="text-white/30 ml-3">•</span>}
-              </motion.span>
+              </span>
             ))}
-          </motion.div>
+          </div>
 
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.9 }}
+          <p
+            ref={subtitleRef}
             className="text-base text-white/60 max-w-xl mx-auto mb-10"
           >
             İhraç fazlası ithal ürünler, uygun fiyatlarla.
-          </motion.p>
+          </p>
 
-          {/* CTA Butonları */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 1 }}
-            className="flex flex-col sm:flex-row items-center justify-center gap-4"
-          >
+          {/* CTA Buttons with magnetic hover */}
+          <div ref={ctaRef} className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link
               href="/urunler"
-              className="group relative px-8 py-4 bg-white text-black font-medium text-lg rounded-full overflow-hidden transition-all duration-300 hover:shadow-[0_0_30px_rgba(255,255,255,0.3)]"
+              className="hero-btn group relative px-8 py-4 bg-white text-black font-medium text-lg rounded-full overflow-hidden transition-shadow duration-300 hover:shadow-[0_0_40px_rgba(255,255,255,0.3)] will-change-transform"
             >
               <span className="relative z-10">Ürünleri Keşfet</span>
-              <div className="absolute inset-0 bg-gradient-to-r from-blue-100 to-white opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+              <div className="absolute inset-0 bg-gradient-to-r from-blue-100 via-white to-blue-100 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
             </Link>
             <Link
               href="/hakkimizda"
-              className="px-8 py-4 bg-transparent text-white font-medium text-lg rounded-full border border-white/30 hover:border-white/60 hover:bg-white/10 transition-all duration-300 backdrop-blur-sm"
+              className="hero-btn px-8 py-4 bg-transparent text-white font-medium text-lg rounded-full border border-white/30 hover:border-white/60 hover:bg-white/10 transition-all duration-300 backdrop-blur-sm will-change-transform"
             >
               Hakkımızda
             </Link>
-          </motion.div>
-        </motion.div>
+          </div>
+        </div>
 
-        {/* Stats */}
-        <motion.div
-          initial={{ opacity: 0, y: 40 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 1.2, duration: 0.8 }}
-          className="grid grid-cols-3 gap-8 md:gap-16 max-w-xl mx-auto mt-16 md:mt-20"
-        >
-          {[
-            { value: "10+", label: "Dünya Markası" },
-            { value: "5.0", label: "Google (58 yorum)", hasStar: true },
-            { value: "%100", label: "İthal Ürün" },
-          ].map((stat, i) => (
-            <motion.div
-              key={stat.label}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 1.3 + i * 0.1 }}
-              className="text-center"
-            >
-              <div className="flex items-center justify-center gap-1">
-                <span className="text-2xl md:text-3xl font-semibold text-white">{stat.value}</span>
-                {stat.hasStar && (
-                  <svg className="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                  </svg>
-                )}
-              </div>
-              <p className="text-xs md:text-sm text-white/50 mt-1">{stat.label}</p>
-            </motion.div>
-          ))}
-        </motion.div>
+        {/* Stats with count-up */}
+        <div ref={statsRef} className="grid grid-cols-3 gap-8 md:gap-16 max-w-xl mx-auto mt-16 md:mt-20">
+          <StatItem value="10+" label="Dünya Markası" />
+          <StatItem value="5.0" label="Google (58 yorum)" hasStar />
+          <StatItem value="%100" label="İthal Ürün" />
+        </div>
       </div>
 
-      {/* Scroll Indicator */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 1.8 }}
-        className="absolute bottom-8 left-1/2 -translate-x-1/2"
-      >
-        <motion.div
-          animate={{ y: [0, 10, 0] }}
-          transition={{ repeat: Infinity, duration: 1.5 }}
-          className="w-6 h-10 rounded-full border-2 border-white/30 flex items-start justify-center p-2"
-        >
-          <motion.div
-            animate={{ opacity: [0.3, 1, 0.3], height: ["4px", "8px", "4px"] }}
-            transition={{ repeat: Infinity, duration: 1.5 }}
-            className="w-1 bg-white/60 rounded-full"
-          />
-        </motion.div>
-      </motion.div>
+      {/* Scroll Indicator with anime.js bounce */}
+      <div ref={scrollRef} className="absolute bottom-8 left-1/2 -translate-x-1/2">
+        <ScrollIndicator />
+      </div>
     </section>
+  );
+}
+
+function StatItem({ value, label, hasStar }: { value: string; label: string; hasStar?: boolean }) {
+  return (
+    <div className="hero-stat text-center">
+      <div className="flex items-center justify-center gap-1">
+        <span className="text-2xl md:text-3xl font-semibold text-white">{value}</span>
+        {hasStar && (
+          <svg className="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+          </svg>
+        )}
+      </div>
+      <p className="text-xs md:text-sm text-white/50 mt-1">{label}</p>
+    </div>
+  );
+}
+
+function ScrollIndicator() {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!ref.current) return;
+
+    const dot = ref.current.querySelector(".scroll-dot") as HTMLElement;
+    if (!dot) return;
+
+    animate(dot, {
+      translateY: [0, 12, 0],
+      opacity: [0.3, 1, 0.3],
+      duration: 1500,
+      loop: true,
+      ease: "inOutSine",
+    });
+
+    animate(ref.current, {
+      translateY: [0, 8, 0],
+      duration: 2000,
+      loop: true,
+      ease: "inOutQuad",
+    });
+  }, []);
+
+  return (
+    <div ref={ref} className="w-6 h-10 rounded-full border-2 border-white/30 flex items-start justify-center p-2">
+      <div className="scroll-dot w-1 h-2 bg-white/60 rounded-full" />
+    </div>
   );
 }

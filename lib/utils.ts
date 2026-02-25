@@ -81,8 +81,10 @@ export function getStockStatus(stock: number): {
 } {
   if (stock > 5) {
     return { text: "Stokta", color: "success" };
-  } else if (stock > 0) {
+  } else if (stock > 1) {
     return { text: `Son ${stock} adet`, color: "warning" };
+  } else if (stock === 1) {
+    return { text: "Tükenmek Üzere", color: "error" };
   } else {
     return { text: "Tükendi", color: "error" };
   }

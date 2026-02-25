@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { animate, stagger } from "animejs";
 
 const testimonials = [
     {
@@ -61,7 +61,63 @@ function StarRating({ rating }: { rating: number }) {
 export default function Testimonials() {
     const [current, setCurrent] = useState(0);
     const [isAutoPlaying, setIsAutoPlaying] = useState(true);
+    const sectionRef = useRef<HTMLElement>(null);
+    const headerRef = useRef<HTMLDivElement>(null);
+    const cardRef = useRef<HTMLDivElement>(null);
+    const dotsRef = useRef<HTMLDivElement>(null);
 
+    // Header entrance animation
+    useEffect(() => {
+        if (!headerRef.current) return;
+
+        const badge = headerRef.current.querySelector(".test-badge") as HTMLElement;
+        const title = headerRef.current.querySelector(".test-title") as HTMLElement;
+        const subtitle = headerRef.current.querySelector(".test-subtitle") as HTMLElement;
+
+        [badge, title, subtitle].forEach((el) => {
+            if (el) { el.style.opacity = "0"; el.style.transform = "translateY(30px)"; }
+        });
+
+        const observer = new IntersectionObserver(
+            (entries) => {
+                entries.forEach((entry) => {
+                    if (entry.isIntersecting) {
+                        animate([badge, title, subtitle].filter(Boolean), {
+                            opacity: [0, 1],
+                            translateY: [30, 0],
+                            duration: 1000,
+                            delay: stagger(120),
+                            ease: "outExpo",
+                        });
+                        observer.disconnect();
+                    }
+                });
+            },
+            { threshold: 0.2 }
+        );
+
+        observer.observe(headerRef.current);
+        return () => observer.disconnect();
+    }, []);
+
+    // Card transition animation
+    useEffect(() => {
+        if (!cardRef.current) return;
+
+        const card = cardRef.current;
+        card.style.opacity = "0";
+        card.style.transform = "translateY(20px) scale(0.97)";
+
+        animate(card, {
+            opacity: [0, 1],
+            translateY: [20, 0],
+            scale: [0.97, 1],
+            duration: 700,
+            ease: "outExpo",
+        });
+    }, [current]);
+
+    // Auto-play
     useEffect(() => {
         if (!isAutoPlaying) return;
         const timer = setInterval(() => {
@@ -70,24 +126,82 @@ export default function Testimonials() {
         return () => clearInterval(timer);
     }, [isAutoPlaying]);
 
-    const goTo = (index: number) => {
+    const goTo = useCallback((index: number) => {
         setCurrent(index);
         setIsAutoPlaying(false);
-        // Resume auto-play after 10 seconds
         setTimeout(() => setIsAutoPlaying(true), 10000);
-    };
+    }, []);
+
+    // Dots animation 
+    useEffect(() => {
+        if (!dotsRef.current) return;
+
+        const dots = dotsRef.current.querySelectorAll(".test-dot");
+        dots.forEach((dot, i) => {
+            const el = dot as HTMLElement;
+            if (i === current) {
+                animate(el, {
+                    width: 32,
+                    opacity: 1,
+                    duration: 400,
+                    ease: "outExpo",
+                });
+            } else {
+                animate(el, {
+                    width: 8,
+                    opacity: 0.5,
+                    duration: 400,
+                    ease: "outExpo",
+                });
+            }
+        });
+    }, [current]);
+
+    // Parallax on section
+    useEffect(() => {
+        if (!sectionRef.current) return;
+
+        let ticking = false;
+
+        const handleScroll = () => {
+            if (!ticking) {
+                requestAnimationFrame(() => {
+                    const rect = sectionRef.current!.getBoundingClientRect();
+                    const windowHeight = window.innerHeight;
+
+                    if (rect.top < windowHeight && rect.bottom > 0) {
+                        const progress = (windowHeight - rect.top) / (windowHeight + rect.height);
+                        const bgOffset = (progress - 0.5) * 30;
+                        const cardOffset = (progress - 0.5) * -15;
+
+                        if (cardRef.current) {
+                            cardRef.current.style.transform = `translateY(${cardOffset}px)`;
+                        }
+                    }
+
+                    ticking = false;
+                });
+                ticking = true;
+            }
+        };
+
+        window.addEventListener("scroll", handleScroll, { passive: true });
+        return () => window.removeEventListener("scroll", handleScroll);
+    }, []);
 
     return (
-        <section className="py-20 md:py-28 bg-gradient-to-b from-gray-100 to-white dark:from-[#111] dark:to-[#0a0a0a] overflow-hidden">
-            <div className="container-wide">
+        <section
+            ref={sectionRef}
+            className="py-20 md:py-28 bg-gradient-to-b from-gray-100 to-white dark:from-[#111] dark:to-[#0a0a0a] overflow-hidden relative"
+        >
+            {/* Background decorative */}
+            <div className="absolute top-0 left-1/4 w-[400px] h-[400px] bg-yellow-500/3 rounded-full blur-[150px] pointer-events-none" />
+            <div className="absolute bottom-0 right-1/4 w-[300px] h-[300px] bg-accent/3 rounded-full blur-[120px] pointer-events-none" />
+
+            <div className="container-wide relative z-10">
                 {/* Header */}
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }}
-                    className="text-center mb-14"
-                >
-                    <div className="inline-flex items-center gap-2 px-4 py-2 bg-yellow-50 dark:bg-yellow-900/20 rounded-full mb-6">
+                <div ref={headerRef} className="text-center mb-14">
+                    <div className="test-badge inline-flex items-center gap-2 px-4 py-2 bg-yellow-50 dark:bg-yellow-900/20 rounded-full mb-6">
                         <svg className="w-5 h-5 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
                             <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                         </svg>
@@ -95,64 +209,62 @@ export default function Testimonials() {
                             Google&apos;da 5.0 Puan
                         </span>
                     </div>
-                    <h2 className="text-headline text-foreground dark:text-white mb-3">
+                    <h2 className="test-title text-headline text-foreground dark:text-white mb-3">
                         Müşterilerimiz Ne Diyor?
                     </h2>
-                    <p className="text-body-large text-gray-500">
+                    <p className="test-subtitle text-body-large text-gray-500">
                         58 Google yorumundan bazıları
                     </p>
-                </motion.div>
+                </div>
 
-                {/* Testimonial Carousel */}
+                {/* Testimonial Card */}
                 <div className="relative max-w-3xl mx-auto">
-                    <AnimatePresence mode="wait">
-                        <motion.div
-                            key={current}
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -20 }}
-                            transition={{ duration: 0.4 }}
-                            className="bg-white dark:bg-[#161616] rounded-apple p-8 md:p-12 shadow-apple text-center relative"
-                        >
-                            {/* Quote icon */}
-                            <div className="absolute top-6 left-8 text-accent/10 dark:text-accent/20">
-                                <svg className="w-12 h-12" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10H14.017zM0 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151C7.546 6.068 5.983 8.789 5.983 11H10v10H0z" />
-                                </svg>
+                    <div
+                        ref={cardRef}
+                        className="bg-white dark:bg-[#161616] rounded-apple p-8 md:p-12 shadow-apple text-center relative will-change-transform"
+                    >
+                        {/* Quote icon */}
+                        <div className="absolute top-6 left-8 text-accent/10 dark:text-accent/20">
+                            <svg className="w-12 h-12" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10H14.017zM0 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151C7.546 6.068 5.983 8.789 5.983 11H10v10H0z" />
+                            </svg>
+                        </div>
+
+                        <StarRating rating={testimonials[current].rating} />
+
+                        <p className="text-lg md:text-xl text-foreground dark:text-white leading-relaxed mt-6 mb-8 font-light">
+                            &ldquo;{testimonials[current].text}&rdquo;
+                        </p>
+
+                        <div className="flex items-center justify-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-accent to-blue-600 flex items-center justify-center text-sm font-semibold text-white">
+                                {testimonials[current].name.charAt(0)}
                             </div>
-
-                            <StarRating rating={testimonials[current].rating} />
-
-                            <p className="text-lg md:text-xl text-foreground dark:text-white leading-relaxed mt-6 mb-8 font-light">
-                                &ldquo;{testimonials[current].text}&rdquo;
-                            </p>
-
-                            <div className="flex items-center justify-center gap-3">
-                                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-accent to-blue-600 flex items-center justify-center text-sm font-semibold text-white">
-                                    {testimonials[current].name.charAt(0)}
-                                </div>
-                                <div className="text-left">
-                                    <p className="font-medium text-foreground dark:text-white text-sm">
-                                        {testimonials[current].name}
-                                    </p>
-                                    <p className="text-xs text-gray-500">
-                                        {testimonials[current].location} • {testimonials[current].product}
-                                    </p>
-                                </div>
+                            <div className="text-left">
+                                <p className="font-medium text-foreground dark:text-white text-sm">
+                                    {testimonials[current].name}
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                    {testimonials[current].location} • {testimonials[current].product}
+                                </p>
                             </div>
-                        </motion.div>
-                    </AnimatePresence>
+                        </div>
+                    </div>
 
                     {/* Dots */}
-                    <div className="flex items-center justify-center gap-2 mt-8">
+                    <div ref={dotsRef} className="flex items-center justify-center gap-2 mt-8">
                         {testimonials.map((_, index) => (
                             <button
                                 key={index}
                                 onClick={() => goTo(index)}
-                                className={`transition-all duration-300 rounded-full ${index === current
-                                        ? "w-8 h-2 bg-accent"
-                                        : "w-2 h-2 bg-gray-300 dark:bg-gray-600 hover:bg-gray-400"
+                                className={`test-dot h-2 rounded-full transition-colors duration-300 ${index === current
+                                        ? "bg-accent"
+                                        : "bg-gray-300 dark:bg-gray-600 hover:bg-gray-400"
                                     }`}
+                                style={{
+                                    width: index === current ? 32 : 8,
+                                    opacity: index === current ? 1 : 0.5,
+                                }}
                                 aria-label={`Yorum ${index + 1}`}
                             />
                         ))}

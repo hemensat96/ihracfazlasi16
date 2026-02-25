@@ -1,6 +1,7 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { useEffect, useRef } from "react";
+import { animate, stagger } from "animejs";
 
 const trustItems = [
     {
@@ -42,36 +43,157 @@ const trustItems = [
 ];
 
 export default function TrustBadges() {
+    const sectionRef = useRef<HTMLElement>(null);
+    const headerRef = useRef<HTMLDivElement>(null);
+    const gridRef = useRef<HTMLDivElement>(null);
+
+    // Header animation
+    useEffect(() => {
+        if (!headerRef.current) return;
+
+        const title = headerRef.current.querySelector(".trust-title") as HTMLElement;
+        const subtitle = headerRef.current.querySelector(".trust-subtitle") as HTMLElement;
+        if (title) { title.style.opacity = "0"; title.style.transform = "translateY(25px)"; }
+        if (subtitle) { subtitle.style.opacity = "0"; subtitle.style.transform = "translateY(25px)"; }
+
+        const observer = new IntersectionObserver(
+            (entries) => {
+                entries.forEach((entry) => {
+                    if (entry.isIntersecting) {
+                        animate([title, subtitle].filter(Boolean), {
+                            opacity: [0, 1],
+                            translateY: [25, 0],
+                            duration: 900,
+                            delay: stagger(120),
+                            ease: "outExpo",
+                        });
+                        observer.disconnect();
+                    }
+                });
+            },
+            { threshold: 0.3 }
+        );
+
+        observer.observe(headerRef.current);
+        return () => observer.disconnect();
+    }, []);
+
+    // Cards stagger animation
+    useEffect(() => {
+        if (!gridRef.current) return;
+
+        const cards = gridRef.current.querySelectorAll(".trust-card");
+        cards.forEach((card) => {
+            (card as HTMLElement).style.opacity = "0";
+            (card as HTMLElement).style.transform = "translateY(50px) scale(0.9)";
+        });
+
+        const observer = new IntersectionObserver(
+            (entries) => {
+                entries.forEach((entry) => {
+                    if (entry.isIntersecting) {
+                        animate(cards, {
+                            opacity: [0, 1],
+                            translateY: [50, 0],
+                            scale: [0.9, 1],
+                            duration: 1000,
+                            delay: stagger(120, { from: "center" }),
+                            ease: "outExpo",
+                        });
+                        observer.disconnect();
+                    }
+                });
+            },
+            { threshold: 0.1 }
+        );
+
+        observer.observe(gridRef.current);
+        return () => observer.disconnect();
+    }, []);
+
+    // Icon bounce on hover
+    useEffect(() => {
+        if (!gridRef.current) return;
+
+        const cards = gridRef.current.querySelectorAll(".trust-card");
+
+        const handleMouseEnter = (e: Event) => {
+            const card = e.currentTarget as HTMLElement;
+            const icon = card.querySelector(".trust-icon") as HTMLElement;
+            if (icon) {
+                animate(icon, {
+                    scale: [1, 1.2, 1.1],
+                    rotate: [0, -10, 10, 0],
+                    duration: 600,
+                    ease: "outElastic(1, 0.5)",
+                });
+            }
+        };
+
+        cards.forEach((card) => {
+            card.addEventListener("mouseenter", handleMouseEnter);
+        });
+
+        return () => {
+            cards.forEach((card) => {
+                card.removeEventListener("mouseenter", handleMouseEnter);
+            });
+        };
+    }, []);
+
+    // Parallax floating effect
+    useEffect(() => {
+        if (!gridRef.current) return;
+
+        let ticking = false;
+
+        const handleScroll = () => {
+            if (!ticking) {
+                requestAnimationFrame(() => {
+                    const cards = gridRef.current?.querySelectorAll(".trust-card");
+                    cards?.forEach((card, i) => {
+                        const rect = card.getBoundingClientRect();
+                        const windowHeight = window.innerHeight;
+                        if (rect.top < windowHeight && rect.bottom > 0) {
+                            const progress = (windowHeight - rect.top) / (windowHeight + rect.height);
+                            const offset = (progress - 0.5) * 15 * (i % 2 === 0 ? 1 : -1);
+                            (card as HTMLElement).style.transform = `translateY(${offset}px)`;
+                        }
+                    });
+                    ticking = false;
+                });
+                ticking = true;
+            }
+        };
+
+        window.addEventListener("scroll", handleScroll, { passive: true });
+        return () => window.removeEventListener("scroll", handleScroll);
+    }, []);
+
     return (
-        <section className="py-16 md:py-20 bg-white dark:bg-[#0a0a0a]">
-            <div className="container-wide">
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }}
-                    className="text-center mb-12"
-                >
-                    <h2 className="text-headline text-foreground dark:text-white mb-3">Neden Biz?</h2>
-                    <p className="text-body-large text-gray-500">
+        <section ref={sectionRef} className="py-16 md:py-20 bg-white dark:bg-[#0a0a0a] relative overflow-hidden">
+            {/* Background glow */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-accent/5 rounded-full blur-[120px] pointer-events-none" />
+
+            <div className="container-wide relative z-10">
+                <div ref={headerRef} className="text-center mb-12">
+                    <h2 className="trust-title text-headline text-foreground dark:text-white mb-3">Neden Biz?</h2>
+                    <p className="trust-subtitle text-body-large text-gray-500">
                         Güvenle alışveriş yapmanız için 4 sebep
                     </p>
-                </motion.div>
+                </div>
 
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-                    {trustItems.map((item, index) => (
-                        <motion.div
+                <div ref={gridRef} className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+                    {trustItems.map((item) => (
+                        <div
                             key={item.title}
-                            initial={{ opacity: 0, y: 30 }}
-                            whileInView={{ opacity: 1, y: 0 }}
-                            viewport={{ once: true }}
-                            transition={{ delay: index * 0.1 }}
-                            className="group relative bg-gray-100 dark:bg-[#161616] rounded-apple p-6 md:p-8 text-center hover:bg-gradient-to-br hover:from-accent/5 hover:to-accent/10 dark:hover:from-accent/10 dark:hover:to-accent/20 transition-all duration-500 border border-transparent hover:border-accent/20"
+                            className="trust-card group relative bg-gray-100 dark:bg-[#161616] rounded-apple p-6 md:p-8 text-center hover:bg-gradient-to-br hover:from-accent/5 hover:to-accent/10 dark:hover:from-accent/10 dark:hover:to-accent/20 transition-all duration-500 border border-transparent hover:border-accent/20 will-change-transform"
                         >
                             {/* Glow effect on hover */}
                             <div className="absolute inset-0 rounded-apple opacity-0 group-hover:opacity-100 transition-opacity duration-500 bg-gradient-to-br from-accent/5 to-transparent blur-xl" />
 
                             <div className="relative">
-                                <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-accent/10 dark:bg-accent/20 text-accent mb-5 group-hover:scale-110 transition-transform duration-300">
+                                <div className="trust-icon inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-accent/10 dark:bg-accent/20 text-accent mb-5 transition-transform duration-300 will-change-transform">
                                     {item.icon}
                                 </div>
                                 <h3 className="text-lg font-semibold text-foreground dark:text-white mb-2">
@@ -81,7 +203,7 @@ export default function TrustBadges() {
                                     {item.description}
                                 </p>
                             </div>
-                        </motion.div>
+                        </div>
                     ))}
                 </div>
             </div>
