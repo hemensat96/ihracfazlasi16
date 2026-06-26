@@ -80,10 +80,12 @@ async function proxyRequest(request: NextRequest, slug: string[]): Promise<NextR
   const { search } = new URL(request.url);
   const targetUrl = FLASK_BASE + path + search;
 
+  const clientIp = request.headers.get('x-forwarded-for') || '127.0.0.1';
+
   const forwardHeaders: Record<string, string> = {
-    'X-Forwarded-For': request.ip || '127.0.0.1',
+    'X-Forwarded-For': clientIp,
     'X-Forwarded-Proto': 'http',
-    'X-Real-IP': request.ip || '127.0.0.1',
+    'X-Real-IP': clientIp,
   };
 
   request.headers.forEach((value, key) => {
