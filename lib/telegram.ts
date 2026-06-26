@@ -7,6 +7,25 @@ const API_KEY = process.env.API_SECRET_KEY || "";
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 
+// ==========================================
+// GÜVENLİK - YETKİLENDİRME (Faz 0)
+// ==========================================
+// Botu yalnızca izinli Telegram chat/kullanıcı ID'leri kullanabilir.
+// Virgülle ayrılmış liste: TELEGRAM_ALLOWED_CHAT_IDS="123456789,987654321"
+// Liste boşsa bot "kurulum modu"na geçer ve sahibin kendi Chat ID'sini öğrenmesini sağlar.
+const ALLOWED_CHAT_IDS: Set<number> = new Set(
+  (process.env.TELEGRAM_ALLOWED_CHAT_IDS || "")
+    .split(",")
+    .map((s) => parseInt(s.trim(), 10))
+    .filter((n) => !isNaN(n))
+);
+
+// Bu chat/kullanıcı botu kullanma yetkisine sahip mi?
+function isAuthorized(chatId: number, userId: number): boolean {
+  if (ALLOWED_CHAT_IDS.size === 0) return false; // yapılandırılmamış -> kurulum modu
+  return ALLOWED_CHAT_IDS.has(chatId) || ALLOWED_CHAT_IDS.has(userId);
+}
+
 // Daily report settings (stored in memory, reset on deploy)
 interface ReportSettings {
   chatId: number;
@@ -3564,6 +3583,30 @@ export async function handleUpdate(update: TelegramUpdate) {
   const chatId = message.chat.id;
   const userId = message.from?.id || chatId;
   const text = message.text?.trim() || "";
+
+  // --- Yetkilendirme (Faz 0 güvenlik) ---
+  // Yetkisiz kişiler hiçbir komutu/işlemi çalıştıramaz.
+  if (!isAuthorized(chatId, userId)) {
+    if (ALLOWED_CHAT_IDS.size === 0) {
+      // Kurulum modu: henüz yetkili tanımlanmamış. Sahibe kendi Chat ID'sini göster.
+      await sendMessage(
+        chatId,
+        `⚙️ <b>Bot henüz yapılandırılmamış.</b>\n\n` +
+        `Bu botu kullanabilmek için Chat ID'nizin yetkili listesine eklenmesi gerekir.\n\n` +
+        `🆔 <b>Sizin Chat ID:</b> <code>${chatId}</code>\n\n` +
+        `Bu numarayı sunucudaki <code>TELEGRAM_ALLOWED_CHAT_IDS</code> ortam değişkenine ekleyin ` +
+        `(birden fazla yetkili için virgülle ayırın) ve uygulamayı yeniden başlatın.`
+      );
+    } else {
+      console.warn(`[Auth] Yetkisiz erişim denemesi engellendi. chatId=${chatId} userId=${userId}`);
+      await sendMessage(
+        chatId,
+        `⛔ <b>Bu botu kullanma yetkiniz yok.</b>\n\n` +
+        `Erişim için yöneticiye şu Chat ID'yi iletin:\n🆔 <code>${chatId}</code>`
+      );
+    }
+    return;
+  }
 
   // Debug logging for media
   if (message.photo) {

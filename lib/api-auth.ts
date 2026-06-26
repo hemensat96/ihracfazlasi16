@@ -29,7 +29,8 @@ export async function validateApiKey(request: NextRequest): Promise<AuthResult> 
   const apiKey = authHeader.replace("Bearer ", "");
 
   // Önce env'deki sabit key'i kontrol et (development için)
-  if (apiKey === process.env.API_SECRET_KEY) {
+  // Not: API_SECRET_KEY tanımsız/boşsa asla eşleşmemeli (boş Bearer token kabul edilmesin).
+  if (process.env.API_SECRET_KEY && apiKey === process.env.API_SECRET_KEY) {
     return { success: true };
   }
 
