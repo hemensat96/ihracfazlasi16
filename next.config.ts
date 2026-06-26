@@ -6,6 +6,9 @@ const withBundleAnalyzer = bundleAnalyzer({
 });
 
 const nextConfig: NextConfig = {
+  // Disable automatic trailing slash redirect — middleware handles this,
+  // and /panel/* routes need trailing slashes to reach Flask correctly.
+  skipTrailingSlashRedirect: true,
   images: {
     remotePatterns: [
       {
